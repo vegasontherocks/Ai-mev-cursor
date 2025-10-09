@@ -1,0 +1,36 @@
+{
+  "name": "@mev-bot/eliza-agent-ai",
+  "version": "1.0.0",
+  "description": "AI-powered MEV extraction agent using Eliza framework",
+  "main": "dist/index.js",
+  "type": "module",
+  "scripts": {
+    "start": "node --loader ts-node/esm src/index.ts",
+    "dev": "nodemon --exec node --loader ts-node/esm src/index.ts",
+    "build": "tsc",
+    "train": "python ../rl-models/train.py"
+  },
+  "dependencies": {
+    "@ai16z/eliza": "^0.1.4",
+    "@ai16z/adapter-postgres": "^0.1.0",
+    "@ai16z/adapter-sqlite": "^0.1.0",
+    "@anthropic-ai/sdk": "^0.9.1",
+    "@thirdweb-dev/sdk": "^4.0.0",
+    "ethers": "^6.9.0",
+    "openai": "^4.20.0",
+    "onnxruntime-node": "^1.16.0",
+    "dotenv": "^16.3.1",
+    "ws": "^8.14.2",
+    "uuid": "^9.0.1",
+    "pgvector": "^0.1.0",
+    "pg": "^8.11.3"
+  },
+  "devDependencies": {
+    "@types/node": "^20.10.0",
+    "@types/ws": "^8.5.9",
+    "@types/uuid": "^9.0.7",
+    "typescript": "^5.3.0",
+    "ts-node": "^10.9.2",
+    "nodemon": "^3.0.2"
+  }
+}
