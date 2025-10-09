@@ -6,8 +6,8 @@
     "generate-contracts": "ts-node generate-contracts-with-nebula.ts"
   },
   "dependencies": {
-    "@thirdweb-dev/sdk": "^4.0.0",
-    "dotenv": "^16.3.1"
+    "@thirdweb-dev/sdk": "^4.0.99",
+    "dotenv": "^16.6.1"
   },
   "devDependencies": {
     "@types/node": "^20.10.0",
