@@ -9,16 +9,27 @@
     "dev": "nodemon --exec node --loader ts-node/esm src/index.ts",
     "build": "tsc",
     "test": "node --loader ts-node/esm test-config.ts",
+    "mcp": "npx -y @modelcontextprotocol/server-everything",
     "health": "node --loader ts-node/esm test-config.ts"
   },
   "dependencies": {
+    "@ai16z/eliza": "^0.1.4",
+    "@ai16z/adapter-sqlite": "^0.1.0",
     "@thirdweb-dev/sdk": "^4.0.0",
+    "@ai-sdk/openai": "^0.0.24",
+    "ai": "^3.0.0",
     "ethers": "^5.7.2",
-    "dotenv": "^16.3.1"
+    "dotenv": "^16.3.1",
+    "ws": "^8.14.2",
+    "uuid": "^9.0.1",
+    "openai": "^4.20.0"
   },
   "devDependencies": {
     "@types/node": "^20.10.0",
+    "@types/ws": "^8.5.9",
+    "@types/uuid": "^9.0.7",
     "typescript": "^5.3.0",
-    "ts-node": "^10.9.2"
+    "ts-node": "^10.9.2",
+    "nodemon": "^3.0.2"
   }
 }
