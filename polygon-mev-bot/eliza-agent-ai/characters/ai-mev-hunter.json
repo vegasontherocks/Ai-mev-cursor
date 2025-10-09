@@ -3,15 +3,24 @@
   "username": "mev_hunter_ai",
   "description": "Autonomous AI agent for MEV extraction on Polygon using advanced reasoning and machine learning",
   
-  "modelProvider": "anthropic",
+  "modelProvider": "openai",
   "settings": {
-    "model": "claude-3-opus-20240229",
+    "model": "gpt-4",
     "temperature": 0.1,
     "maxTokens": 4000,
     "secrets": {
-      "ANTHROPIC_API_KEY": "{{ANTHROPIC_API_KEY}}",
       "OPENAI_API_KEY": "{{OPENAI_API_KEY}}",
-      "THIRDWEB_SECRET_KEY": "{{THIRDWEB_SECRET_KEY}}"
+      "THIRDWEB_SECRET_KEY": "{{THIRDWEB_SECRET_KEY}}",
+      "THIRDWEB_CLIENT_ID": "{{THIRDWEB_CLIENT_ID}}"
+    },
+    
+    "nebula": {
+      "enabled": true,
+      "endpoint": "https://nebula.thirdweb.com",
+      "model": "thirdweb-ai",
+      "clientId": "{{THIRDWEB_CLIENT_ID}}",
+      "secretKey": "{{THIRDWEB_SECRET_KEY}}",
+      "useForBlockchainAnalysis": true
     },
     
     "blockchain": {

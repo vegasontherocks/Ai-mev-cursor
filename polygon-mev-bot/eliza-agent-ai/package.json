@@ -8,7 +8,9 @@
     "start": "node --loader ts-node/esm src/index.ts",
     "dev": "nodemon --exec node --loader ts-node/esm src/index.ts",
     "build": "tsc",
-    "mcp": "npx -y @thirdweb-dev/mcp-server"
+    "test": "node --loader ts-node/esm test-config.ts",
+    "mcp": "npx -y @thirdweb-dev/mcp-server",
+    "health": "node --loader ts-node/esm test-config.ts"
   },
   "dependencies": {
     "@ai16z/eliza": "^0.1.4",
@@ -20,7 +22,8 @@
     "ethers": "^6.9.0",
     "dotenv": "^16.3.1",
     "ws": "^8.14.2",
-    "uuid": "^9.0.1"
+    "uuid": "^9.0.1",
+    "openai": "^4.20.0"
   },
   "devDependencies": {
     "@types/node": "^20.10.0",
