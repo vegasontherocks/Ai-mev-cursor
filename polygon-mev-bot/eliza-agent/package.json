@@ -1,0 +1,32 @@
+{
+  "name": "polygon-mev-hunter",
+  "version": "1.0.0",
+  "description": "AI-powered MEV bot for Polygon network",
+  "main": "src/index.ts",
+  "scripts": {
+    "start": "ts-node src/index.ts",
+    "dev": "nodemon --exec ts-node src/index.ts",
+    "build": "tsc",
+    "test": "jest",
+    "lint": "eslint src/**/*.ts"
+  },
+  "dependencies": {
+    "@ai16z/eliza": "^0.1.0",
+    "ethers": "^5.7.2",
+    "dotenv": "^16.3.1",
+    "ws": "^8.14.2",
+    "node-fetch": "^2.7.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.9.0",
+    "@types/ws": "^8.5.8",
+    "typescript": "^5.2.2",
+    "ts-node": "^10.9.1",
+    "nodemon": "^3.0.1",
+    "eslint": "^8.53.0",
+    "@typescript-eslint/eslint-plugin": "^6.10.0",
+    "@typescript-eslint/parser": "^6.10.0",
+    "jest": "^29.7.0",
+    "@types/jest": "^29.5.7"
+  }
+}

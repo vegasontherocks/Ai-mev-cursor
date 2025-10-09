@@ -1,0 +1,39 @@
+# Environment
+.env
+.env.local
+
+# Foundry
+contracts/cache/
+contracts/out/
+contracts/broadcast/
+
+# Node
+node_modules/
+dist/
+.pnp
+.pnp.js
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Models
+eliza-agent/models/*.h5
+eliza-agent/models/*.pb
+
+# Secrets
+*.key
+*.pem
+secrets/
