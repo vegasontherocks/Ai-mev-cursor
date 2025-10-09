@@ -1,0 +1,33 @@
+{
+  "name": "@mev-bot/eliza-agent-ai",
+  "version": "2.0.0",
+  "description": "AI-powered MEV bot using Thirdweb Nebula blockchain LLM",
+  "main": "dist/index.js",
+  "type": "module",
+  "scripts": {
+    "start": "node --loader ts-node/esm src/index.ts",
+    "dev": "nodemon --exec node --loader ts-node/esm src/index.ts",
+    "build": "tsc",
+    "mcp": "npx -y @thirdweb-dev/mcp-server"
+  },
+  "dependencies": {
+    "@ai16z/eliza": "^0.1.4",
+    "@ai16z/adapter-sqlite": "^0.1.0",
+    "@thirdweb-dev/sdk": "^4.0.0",
+    "@thirdweb-dev/mcp-server": "latest",
+    "@ai-sdk/openai": "^0.0.24",
+    "ai": "^3.0.0",
+    "ethers": "^6.9.0",
+    "dotenv": "^16.3.1",
+    "ws": "^8.14.2",
+    "uuid": "^9.0.1"
+  },
+  "devDependencies": {
+    "@types/node": "^20.10.0",
+    "@types/ws": "^8.5.9",
+    "@types/uuid": "^9.0.7",
+    "typescript": "^5.3.0",
+    "ts-node": "^10.9.2",
+    "nodemon": "^3.0.2"
+  }
+}

@@ -1,0 +1,27 @@
+2025-10-09T07:02:01.480394Z ERROR foundry_compilers_artifacts_solc::sources: error="/workspace/polygon-mev-bot/contracts/lib/forge-std/src/Script.sol": No such file or directory (os error 2)
+2025-10-09T07:02:01.480502Z ERROR foundry_compilers_artifacts_solc::sources: error="/workspace/polygon-mev-bot/contracts/lib/forge-std/src/console.sol": No such file or directory (os error 2)
+Unable to resolve imports:
+      "forge-std/Script.sol" in "/workspace/polygon-mev-bot/contracts/script/DeployReal.s.sol"
+      "forge-std/console.sol" in "/workspace/polygon-mev-bot/contracts/script/DeployReal.s.sol"
+with remappings:
+      @openzeppelin/=/workspace/polygon-mev-bot/contracts/lib/openzeppelin-contracts/
+      @balancer-labs/=/workspace/polygon-mev-bot/contracts/lib/balancer-v2-monorepo/
+      @chainlink/=/workspace/polygon-mev-bot/contracts/lib/chainlink/
+      forge-std/=/workspace/polygon-mev-bot/contracts/lib/forge-std/src/
+      ds-test/=/workspace/polygon-mev-bot/contracts/lib/forge-std/lib/ds-test/src/
+Compiling 3 files with Solc 0.8.20
+Solc 0.8.20 finished in 4.88ms
+Error: Compiler run failed:
+Error (6275): Source "lib/forge-std/src/Script.sol" not found: File not found. Searched the following locations: "/workspace/polygon-mev-bot/contracts".
+ParserError: Source "lib/forge-std/src/Script.sol" not found: File not found. Searched the following locations: "/workspace/polygon-mev-bot/contracts".
+ --> script/DeployReal.s.sol:4:1:
+  |
+4 | import {Script} from "forge-std/Script.sol";
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Error (6275): Source "lib/forge-std/src/console.sol" not found: File not found. Searched the following locations: "/workspace/polygon-mev-bot/contracts".
+ParserError: Source "lib/forge-std/src/console.sol" not found: File not found. Searched the following locations: "/workspace/polygon-mev-bot/contracts".
+ --> script/DeployReal.s.sol:6:1:
+  |
+6 | import {console} from "forge-std/console.sol";
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
