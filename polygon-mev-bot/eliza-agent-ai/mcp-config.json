@@ -1,13 +1,11 @@
 {
   "mcpServers": {
     "thirdweb": {
-      "command": "npx",
-      "args": ["-y", "@thirdweb-dev/mcp-server"],
+      "url": "https://api.thirdweb.com/mcp",
       "env": {
-        "THIRDWEB_SECRET_KEY": "${THIRDWEB_SECRET_KEY}",
-        "THIRDWEB_CLIENT_ID": "${THIRDWEB_CLIENT_ID}",
-        "CHAIN_ID": "137"
-      }
+        "THIRDWEB_SECRET_KEY": "5PRECcNSQ9QQdndSpaRAs4zvqER6VzJP8UOTEplGj7JgIZFRIH4p4r2JKmX9uauvEDqOg-VZOUwFBLQz1OrL3Q"
+      },
+      "description": "Official thirdweb MCP server for blockchain operations"
     }
   }
 }
