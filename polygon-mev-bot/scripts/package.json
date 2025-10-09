@@ -1,0 +1,17 @@
+{
+  "name": "@mev-bot/scripts",
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "generate-contracts": "ts-node generate-contracts-with-nebula.ts"
+  },
+  "dependencies": {
+    "@thirdweb-dev/sdk": "^4.0.0",
+    "dotenv": "^16.3.1"
+  },
+  "devDependencies": {
+    "@types/node": "^20.10.0",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.3.0"
+  }
+}
