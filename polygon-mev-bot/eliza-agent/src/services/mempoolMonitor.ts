@@ -11,9 +11,9 @@ interface MempoolTransaction {
 }
 
 const TARGET_DEXS = [
-  '0xa5E0829CaCEd8fFDD4De3c43696c57F7D7A678ff', // QuickSwap
-  '0x1b02dA8Cb0d097eB8D57A175b88c7D8b47997506', // SushiSwap
-  '0xE592427A0AEce92De3Edee1F18E0157C05861564', // Uniswap V3
+  '0xa5e0829caced8ffdd4de3c43696c57f7d7a678ff', // QuickSwap
+  '0x1b02da8cb0d097eb8d57a175b88c7d8b47997506', // SushiSwap
+  '0xe592427a0aece92de3edee1f18e0157c05861564', // Uniswap V3
 ];
 
 const SWAP_SIGNATURES = [

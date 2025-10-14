@@ -2,40 +2,109 @@ import { AgentRuntime, elizaLogger, ModelProviderName } from "@ai16z/eliza";
 import { SqliteDatabaseAdapter } from "@ai16z/adapter-sqlite";
 import { config } from "dotenv";
 import { readFileSync } from "fs";
+import { mkdirSync } from "fs";
 import { resolve } from "path";
+import Database from "better-sqlite3";
 
 // Import AI-powered actions
 import analyzeOpportunityAction from "./actions/analyzeOpportunity.js";
 import selectStrategyAction from "./actions/selectStrategy.js";
 import executeMEVAction from "./actions/executeMEV.js";
 import learnFromResultAction from "./actions/learnFromResult.js";
+import generateContractAction from "./actions/generateContract.js";
 
 // Import services
 import { BlockchainMonitor } from "./services/blockchainMonitor.js";
 import { OpportunityDetector } from "./services/opportunityDetector.js";
+import { ThirdwebMCPIntegration, getNebulaClient } from "./thirdweb-nebula-integration.js";
 
 config();
 
+const missingEnvPlaceholders = new Set<string>();
+
+function resolvePlaceholders<T>(value: T): T {
+  if (typeof value === "string") {
+    return value.replace(/\{\{(.*?)\}\}/g, (_match, key: string) => {
+      const envKey = key.trim();
+      const envValue = process.env[envKey];
+      if (envValue === undefined) {
+        if (!missingEnvPlaceholders.has(envKey)) {
+          elizaLogger.warn(`⚠️  Missing environment variable ${envKey} for character configuration`);
+          missingEnvPlaceholders.add(envKey);
+        }
+        return "";
+      }
+      return envValue;
+    }) as T;
+  }
+
+  if (Array.isArray(value)) {
+    return value.map((item) => resolvePlaceholders(item)) as T;
+  }
+
+  if (value && typeof value === "object") {
+    for (const [key, item] of Object.entries(value)) {
+      (value as Record<string, unknown>)[key] = resolvePlaceholders(item);
+    }
+  }
+
+  return value;
+}
+
 async function main() {
   elizaLogger.info("🚀 Starting AI-Powered MEV Agent (Eliza Framework)");
-  elizaLogger.info("=" +".repeat(60));
+  elizaLogger.info("=" + "=".repeat(60));
   
   // Load character configuration
   const characterPath = resolve("./characters/ai-mev-hunter.json");
-  const character = JSON.parse(readFileSync(characterPath, "utf-8"));
+  const character = resolvePlaceholders(JSON.parse(readFileSync(characterPath, "utf-8")));
   
   elizaLogger.info(`🤖 Loading character: ${character.name}`);
   
   // Initialize database adapter
-  const databaseAdapter = new SqliteDatabaseAdapter("./data/agent.db");
+  const dataDir = resolve("./data");
+  mkdirSync(dataDir, { recursive: true });
+  const dbPath = resolve(dataDir, "agent.db");
+  const db = new Database(dbPath);
+  const databaseAdapter = new SqliteDatabaseAdapter(db);
   await databaseAdapter.init();
   
+  const providerEnv = (process.env.ELIZA_MODEL_PROVIDER || "anthropic").toLowerCase();
+  let modelProvider: ModelProviderName;
+  let token: string | undefined;
+  let serverUrl: string | undefined;
+
+  switch (providerEnv) {
+    case "openai":
+      modelProvider = ModelProviderName.OPENAI;
+      token = process.env.OPENAI_API_KEY;
+      serverUrl = process.env.OPENAI_API_BASE || "https://api.openai.com/v1";
+      break;
+    case "anthropic":
+    default:
+      modelProvider = ModelProviderName.ANTHROPIC;
+      token = process.env.ANTHROPIC_API_KEY;
+      serverUrl = "https://api.anthropic.com";
+      break;
+  }
+
+  if (!token) {
+    throw new Error(`Missing API key for provider ${modelProvider}. Check environment configuration.`);
+  }
+
+  character.modelProvider = providerEnv;
+  if (character.settings) {
+    character.settings.modelProvider = providerEnv;
+  }
+
+  elizaLogger.info(`🧠 Using model provider: ${modelProvider}`);
+
   // Create runtime with AI capabilities
   const runtime = new AgentRuntime({
     databaseAdapter,
-    token: process.env.ANTHROPIC_API_KEY!,
-    serverUrl: "https://api.anthropic.com",
-    modelProvider: "anthropic" as ModelProviderName,
+    token,
+    serverUrl,
+    modelProvider,
     character,
     
     // Register AI-powered actions
@@ -43,7 +112,8 @@ async function main() {
       analyzeOpportunityAction,
       selectStrategyAction,
       executeMEVAction,
-      learnFromResultAction
+      learnFromResultAction,
+      generateContractAction
     ],
     
     // Evaluators can be added for continuous assessment
@@ -51,7 +121,7 @@ async function main() {
     
     // Providers for blockchain data
     providers: []
-  });
+  } as any);
   
   elizaLogger.success("✅ Runtime initialized with AI actions");
   
@@ -67,6 +137,29 @@ async function main() {
   elizaLogger.info(`   Chain: Polygon (${blockchainConfig.chainId})`);
   elizaLogger.info(`   RPC: ${blockchainConfig.rpcUrl}`);
   elizaLogger.info(`   MEV Executor: ${blockchainConfig.mevExecutorAddress}`);
+
+  if (process.env.THIRDWEB_SECRET_KEY) {
+    try {
+      getNebulaClient({
+        secretKey: process.env.THIRDWEB_SECRET_KEY,
+        clientId: process.env.THIRDWEB_CLIENT_ID || "",
+        privateKey: process.env.PRIVATE_KEY || blockchainConfig.privateKey,
+        chainId: blockchainConfig.chainId,
+        mevExecutorAddress: blockchainConfig.mevExecutorAddress
+      });
+    } catch (error) {
+      elizaLogger.error("Failed to initialize Thirdweb Nebula client", error);
+    }
+
+    try {
+      const thirdwebMcp = new ThirdwebMCPIntegration();
+      await thirdwebMcp.initialize();
+    } catch (error) {
+      elizaLogger.error("Failed to initialize Thirdweb MCP integration", error);
+    }
+  } else {
+    elizaLogger.warn("⚠️  THIRDWEB_SECRET_KEY not set. Nebula integration disabled.");
+  }
   
   // Initialize blockchain monitoring
   elizaLogger.info("🔍 Initializing blockchain monitor...");
@@ -103,12 +196,10 @@ async function main() {
   
   elizaLogger.info("\n⏳ Waiting for opportunities...\n");
   
-  // Event handlers
-  monitor.on("opportunity", async (opportunity) => {
+  const forwardOpportunity = async (opportunity: any) => {
     elizaLogger.info(`🎯 Opportunity detected: ${opportunity.type}`);
-    
+
     try {
-      // Trigger AI analysis
       await runtime.processActions(
         {
           userId: runtime.agentId,
@@ -121,12 +212,15 @@ async function main() {
           }
         },
         [],
-        {}
+        undefined
       );
     } catch (error) {
       elizaLogger.error("Error processing opportunity:", error);
     }
-  });
+  };
+
+  monitor.on("opportunity", forwardOpportunity);
+  detector.on("opportunity", forwardOpportunity);
   
   // Periodic status updates
   setInterval(() => {
@@ -163,5 +257,6 @@ async function logAgentStatus(runtime: AgentRuntime) {
 // Start the agent
 main().catch((error) => {
   elizaLogger.error("Fatal error:", error);
+  console.error("Fatal error details:", error);
   process.exit(1);
 });

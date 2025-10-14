@@ -65,12 +65,12 @@ export const analyzeOpportunityAction: Action = {
   name: "ANALYZE_OPPORTUNITY",
   similes: ["ANALYZE_MEV", "EVALUATE_OPPORTUNITY", "ASSESS_TRADE"],
   description: "Uses AI reasoning to analyze MEV opportunities and decide whether to execute",
-  
+
   validate: async (runtime: IAgentRuntime, message: Memory): Promise<boolean> => {
     const content = message.content as any;
     return content.type === "OPPORTUNITY_DETECTED" && content.data !== undefined;
   },
-  
+
   handler: async (
     runtime: IAgentRuntime,
     message: Memory,
@@ -79,16 +79,16 @@ export const analyzeOpportunityAction: Action = {
     callback?: HandlerCallback
   ): Promise<boolean> => {
     elizaLogger.info("🧠 AI analyzing opportunity with LLM reasoning...");
-    
+
     try {
       const opportunity: OpportunityData = (message.content as any).data;
-      
+
       // Gather market context
       const marketContext = await gatherMarketContext(runtime);
-      
+
       // Find similar opportunities from memory
       const similarOpps = await findSimilarOpportunities(runtime, opportunity);
-      
+
       // Compose context for LLM
       const context = {
         opportunityDetails: formatOpportunity(opportunity),
@@ -99,27 +99,27 @@ export const analyzeOpportunityAction: Action = {
         timeOfDay: new Date().toUTCString(),
         similarOpportunities: formatSimilarOpportunities(similarOpps)
       };
-      
+
       // Generate AI analysis using LLM
       const analysisPrompt = composeContext({
-        state: state || {},
+        state: (state as State) || ({} as unknown as State),
         template: opportunityTemplate,
         ...context
       });
-      
+
       elizaLogger.debug("Sending to LLM for reasoning...");
-      
+
       const analysis = await generateText({
         runtime,
         context: analysisPrompt,
         modelClass: "large" // Use best model for critical decisions
       });
-      
+
       elizaLogger.info("📊 AI Analysis Complete:", analysis);
-      
+
       // Parse LLM decision
       const decision = parseLLMAnalysis(analysis);
-      
+
       // Store analysis in memory for future learning
       await runtime.messageManager.createMemory({
         userId: runtime.agentId,
@@ -131,12 +131,11 @@ export const analyzeOpportunityAction: Action = {
           opportunity,
           decision,
           timestamp: Date.now()
-        },
-        embedding: await runtime.embed(JSON.stringify({ opportunity, analysis, decision }))
+        }
       });
-      
+
       elizaLogger.success(`✅ Decision: ${decision.shouldExecute ? 'EXECUTE' : 'SKIP'} (confidence: ${decision.confidence}%)`);
-      
+
       // If AI says execute, trigger strategy selection
       if (decision.shouldExecute && decision.confidence >= 70) {
         await runtime.processActions(
@@ -159,21 +158,21 @@ export const analyzeOpportunityAction: Action = {
       } else {
         elizaLogger.info(`⏭️  Skipping opportunity: ${decision.reason}`);
       }
-      
+
       if (callback) {
         callback({
           text: formatAnalysisResponse(decision),
           action: decision.shouldExecute ? "EXECUTE" : "SKIP"
         });
       }
-      
+
       return true;
     } catch (error) {
       elizaLogger.error("Error in ANALYZE_OPPORTUNITY:", error);
       return false;
     }
   },
-  
+
   examples: [
     [
       {
@@ -209,19 +208,12 @@ async function findSimilarOpportunities(
   runtime: IAgentRuntime,
   opportunity: OpportunityData
 ): Promise<any[]> {
-  // Semantic search in memory for similar past opportunities
-  const embedding = await runtime.embed(JSON.stringify(opportunity));
-  
-  const similar = await runtime.messageManager.searchMemoriesByEmbedding(
-    embedding,
-    {
-      match_threshold: 0.8,
-      count: 5,
-      roomId: runtime.agentId
-    }
-  );
-  
-  return similar || [];
+  // Fallback: naive retrieval of recent similar messages by type
+  const recent = await runtime.messageManager.getMemories({
+    roomId: runtime.agentId,
+    count: 20
+  });
+  return (recent || []).filter((m: any) => m.content?.type === 'OPPORTUNITY_ANALYSIS');
 }
 
 function formatOpportunity(opp: OpportunityData): string {
@@ -240,9 +232,9 @@ function formatSimilarOpportunities(similar: any[]): string {
   if (similar.length === 0) {
     return "No similar opportunities found in memory.";
   }
-  
+
   return `Found ${similar.length} similar opportunities:\n` +
-    similar.map((s, i) => 
+    similar.map((s, i) =>
       `${i + 1}. ${s.content.decision?.shouldExecute ? '✅ Executed' : '❌ Skipped'} - ` +
       `Confidence: ${s.content.decision?.confidence || 'N/A'}% - ` +
       `Outcome: ${s.content.result?.profit || 'Unknown'}`
@@ -252,25 +244,25 @@ function formatSimilarOpportunities(similar: any[]): string {
 function parseLLMAnalysis(analysis: string): any {
   // Parse LLM response to extract decision
   const lines = analysis.toLowerCase();
-  
+
   const shouldExecute = lines.includes('yes') && !lines.includes('no');
-  
+
   // Extract confidence (look for patterns like "confidence: 85%" or "85% confidence")
   const confidenceMatch = analysis.match(/(\d{1,3})%/);
   const confidence = confidenceMatch ? parseInt(confidenceMatch[1]) : 50;
-  
+
   // Extract position size
   const positionMatch = analysis.match(/(\d+\.?\d*)\s*matic/i);
   const positionSize = positionMatch ? parseFloat(positionMatch[1]) : 0.1;
-  
+
   // Extract reason (usually after "because" or "reason:")
   let reason = "Analysis complete";
   const reasonMatch = analysis.match(/reason:?\s*(.+?)(?:\n|$)/i) ||
-                      analysis.match(/because\s+(.+?)(?:\n|$)/i);
+    analysis.match(/because\s+(.+?)(?:\n|$)/i);
   if (reasonMatch) {
     reason = reasonMatch[1].trim();
   }
-  
+
   return {
     shouldExecute,
     confidence,
@@ -283,8 +275,8 @@ function parseLLMAnalysis(analysis: string): any {
 function formatAnalysisResponse(decision: any): string {
   if (decision.shouldExecute) {
     return `✅ EXECUTE - Confidence: ${decision.confidence}%\n` +
-           `Position: ${decision.positionSize} MATIC\n` +
-           `Reason: ${decision.reason}`;
+      `Position: ${decision.positionSize} MATIC\n` +
+      `Reason: ${decision.reason}`;
   } else {
     return `⏭️  SKIP - ${decision.reason}`;
   }

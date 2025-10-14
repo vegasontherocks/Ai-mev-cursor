@@ -15,10 +15,41 @@
  */
 
 import { ThirdwebSDK } from "@thirdweb-dev/sdk";
-import { writeFileSync, mkdirSync } from "fs";
+import { writeFileSync, mkdirSync, existsSync } from "fs";
+import { resolve } from "path";
 import { config } from "dotenv";
 
-config();
+console.log("Starting Nebula contract generator script...");
+
+const candidateEnvPaths = [
+  resolve(process.cwd(), ".env"),
+  resolve(process.cwd(), "..", ".env"),
+  resolve(process.cwd(), "..", "..", ".env")
+];
+
+let envLoaded = false;
+for (const envPath of candidateEnvPaths) {
+  if (existsSync(envPath)) {
+    config({ path: envPath });
+    console.log(`🔐 Loaded environment variables from ${envPath}`);
+    envLoaded = true;
+    break;
+  }
+}
+
+if (!envLoaded) {
+  config();
+  console.warn("⚠️  No .env file found in expected locations; relying on process environment variables");
+}
+
+const REQUIRED_CONTRACT_NAMES = [
+  "Interfaces.sol",
+  "OracleLib.sol",
+  "DEXAdapter.sol",
+  "AaveAdapter.sol",
+  "JITAdapter.sol",
+  "MEVExecutor.sol"
+] as const;
 
 interface GeneratedContract {
   name: string;
@@ -30,14 +61,26 @@ class NebulaContractGenerator {
   private sdk: ThirdwebSDK;
   
   constructor() {
-    this.sdk = ThirdwebSDK.fromPrivateKey(
-      process.env.PRIVATE_KEY!,
-      137, // Polygon
-      {
-        secretKey: process.env.THIRDWEB_SECRET_KEY!,
-        clientId: process.env.THIRDWEB_CLIENT_ID!
+    const requiredEnv = ["PRIVATE_KEY", "THIRDWEB_SECRET_KEY", "THIRDWEB_CLIENT_ID"];
+    for (const key of requiredEnv) {
+      if (!process.env[key] || process.env[key]!.trim().length === 0) {
+        throw new Error(`Missing required environment variable: ${key}`);
       }
-    );
+    }
+
+    try {
+      this.sdk = ThirdwebSDK.fromPrivateKey(
+        process.env.PRIVATE_KEY!,
+        137, // Polygon
+        {
+          secretKey: process.env.THIRDWEB_SECRET_KEY!,
+          clientId: process.env.THIRDWEB_CLIENT_ID!
+        }
+      );
+    } catch (error) {
+      console.error("❌ Failed to initialize Thirdweb SDK", error);
+      throw error;
+    }
     
     console.log("✅ Connected to Thirdweb Nebula (blockchain LLM)");
   }
@@ -498,7 +541,12 @@ Return ONLY the Solidity code with all interfaces.
     
     try {
       // Call Nebula through Thirdweb SDK
-      const response = await this.sdk.wallet.call({
+      const wallet = (this.sdk as any).wallet;
+      if (!wallet || typeof wallet.call !== "function") {
+        throw new Error("Thirdweb SDK wallet call() method unavailable. Ensure SDK version supports nebula_generate.");
+      }
+
+      const response = await wallet.call({
         method: "nebula_generate",
         params: [{
           prompt,
@@ -562,6 +610,34 @@ Return ONLY the Solidity code with all interfaces.
     console.log(`✅ Saved: ${path}`);
     console.log(`   ${contract.description}`);
   }
+
+  /**
+   * Ensure Nebula outputs contain real Solidity sources
+   */
+  private validateGeneratedArtifacts(contracts: GeneratedContract[]) {
+    const seen = new Set<string>();
+    for (const contract of contracts) {
+      if (!contract.code || contract.code.trim().length === 0) {
+        throw new Error(`Nebula returned empty code for ${contract.name}`);
+      }
+
+      if (!/pragma\s+solidity/i.test(contract.code)) {
+        throw new Error(`Missing Solidity pragma in ${contract.name}`);
+      }
+
+      if (!/(contract|library|interface)\s+\w+/.test(contract.code)) {
+        throw new Error(`No contract, library, or interface declaration found in ${contract.name}`);
+      }
+
+      seen.add(contract.name);
+    }
+
+    for (const required of REQUIRED_CONTRACT_NAMES) {
+      if (!seen.has(required)) {
+        throw new Error(`Nebula did not return required artifact: ${required}`);
+      }
+    }
+  }
   
   /**
    * Generate all contracts
@@ -585,6 +661,8 @@ Return ONLY the Solidity code with all interfaces.
         this.generateJITAdapter(),
         this.generateMEVExecutor()
       ]);
+
+      this.validateGeneratedArtifacts(contracts);
       
       // Save all contracts
       console.log("\n📝 Saving generated contracts...\n");

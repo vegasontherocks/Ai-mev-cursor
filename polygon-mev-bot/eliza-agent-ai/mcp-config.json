@@ -1,13 +1,20 @@
 {
   "mcpServers": {
-    "thirdweb": {
+    "polygon": {
       "command": "npx",
-      "args": ["-y", "@thirdweb-dev/mcp-server"],
+      "args": [
+        "-y",
+        "tsx",
+        "../mcp-servers/polygon-blockchain/src/index.ts"
+      ],
       "env": {
-        "THIRDWEB_SECRET_KEY": "${THIRDWEB_SECRET_KEY}",
-        "THIRDWEB_CLIENT_ID": "${THIRDWEB_CLIENT_ID}",
-        "CHAIN_ID": "137"
+        "POLYGON_RPC_URL": "${POLYGON_RPC_URL}",
+        "POLYGON_WSS_URL": "${POLYGON_WSS_URL}"
       }
+    },
+    "thirdweb": {
+      "url": "https://api.thirdweb.com/mcp?secretKey=${THIRDWEB_SECRET_KEY}",
+      "description": "Hosted Thirdweb MCP tools (listServerWallets, createServerWallet, readContract, etc.)"
     }
   }
 }
