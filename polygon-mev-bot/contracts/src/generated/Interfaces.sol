@@ -71,7 +71,6 @@ interface IERC20 {
 
 interface IUniswapV2Router02 {
     function factory() external pure returns (address);
-    function WETH() external pure returns (address);
     
     function swapExactTokensForTokens(
         uint amountIn,
@@ -147,6 +146,10 @@ interface IQuoter {
         uint256 amountIn,
         uint160 sqrtPriceLimitX96
     ) external returns (uint256 amountOut);
+
+    function quoteExactInput(bytes memory path, uint256 amountIn)
+        external
+        returns (uint256 amountOut);
 }
 
 interface IUniswapV3Pool {

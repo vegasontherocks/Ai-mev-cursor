@@ -50,6 +50,10 @@ npx ts-node scripts/generate-contracts-with-nebula.ts
 
 if [ $? -eq 0 ]; then
     echo ""
+    echo "🧪 Verifying generated artifacts..."
+    node scripts/validate-generated-contracts.mjs
+
+    echo ""
     echo "╔════════════════════════════════════════════════════════════════════════╗"
     echo "║  ✅ CONTRACTS GENERATED SUCCESSFULLY!                                  ║"
     echo "╚════════════════════════════════════════════════════════════════════════╝"

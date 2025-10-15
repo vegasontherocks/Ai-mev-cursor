@@ -1,14 +1,18 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.20;
 
-import "../src/generated/MEVExecutor.sol";
+import {Script} from "forge-std/Script.sol";
+import {MEVExecutor} from "../src/generated/MEVExecutor.sol";
 
-contract DeployNow {
+contract DeployNow is Script {
     function run() external returns (address) {
-        address balancerVault = 0xBA12222222228d8Ba445958a75a0704d566BF2C8;
-        
+        uint256 deployerPrivateKey = vm.envUint("PRIVATE_KEY");
+        address balancerVault = vm.envAddress("BALANCER_VAULT_ADDRESS");
+
+        vm.startBroadcast(deployerPrivateKey);
         MEVExecutor executor = new MEVExecutor(balancerVault);
-        
+        vm.stopBroadcast();
+
         return address(executor);
     }
 }
