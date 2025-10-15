@@ -1,3 +1,5 @@
+As of 2025-10-14, all contracts and tests build clean and pass; legacy docs/tests archived or restored in `docs/archive/`. E2E agent pipeline validation pending.
+
 ## Polygon MEV Bot – Reality Guide
 
 This repository contains a Foundry-based contract suite (`contracts/`) and an Eliza agent (`eliza-agent-ai/`) that orchestrate Polygon MEV strategies (flash loans, arbitrage, liquidations, and Uniswap v3 JIT liquidity). The project has been brought to a lint-clean state with comprehensive tests, but production readiness still requires operational validation.
