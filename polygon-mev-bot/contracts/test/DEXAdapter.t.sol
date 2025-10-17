@@ -1,17 +1,16 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.20;
 
-import { Test } from "forge-std/Test.sol";
-import { DEXAdapter } from "../src/generated/DEXAdapter.sol";
-import { IQuoter, IUniswapV2Pair } from "../src/generated/Interfaces.sol";
+import {Test} from "forge-std/Test.sol";
+import {DEXAdapter} from "../src/generated/DEXAdapter.sol";
+import {IQuoter, IUniswapV2Pair} from "../src/generated/Interfaces.sol";
 
 contract DEXAdapterHarness {
-    function computeAmountOut(
-        uint256 amountIn,
-        uint256 reserveIn,
-        uint256 reserveOut,
-        uint256 feeBps
-    ) external pure returns (uint256) {
+    function computeAmountOut(uint256 amountIn, uint256 reserveIn, uint256 reserveOut, uint256 feeBps)
+        external
+        pure
+        returns (uint256)
+    {
         return DEXAdapter.getAmountOutV2(amountIn, reserveIn, reserveOut, feeBps);
     }
 
@@ -93,13 +92,11 @@ contract MockQuoter is IQuoter {
         singleQuotes[key] = amountOut;
     }
 
-    function quoteExactInputSingle(
-        address tokenIn,
-        address tokenOut,
-        uint24 fee,
-        uint256 amountIn,
-        uint160
-    ) external override returns (uint256 amountOut) {
+    function quoteExactInputSingle(address tokenIn, address tokenOut, uint24 fee, uint256 amountIn, uint160)
+        external
+        override
+        returns (uint256 amountOut)
+    {
         bytes32 key = keccak256(abi.encode(tokenIn, tokenOut, fee, amountIn));
         lastExactInputSingleAmount = amountIn;
         amountOut = singleQuotes[key];
@@ -149,12 +146,7 @@ contract DEXAdapterTest is Test {
 
     function testQuoteV2RouteSingleHop() public view {
         DEXAdapter.V2Hop[] memory hops = new DEXAdapter.V2Hop[](1);
-        hops[0] = DEXAdapter.V2Hop({
-            pair: address(pairAb),
-            tokenIn: TOKEN_A,
-            tokenOut: TOKEN_B,
-            feeBps: 30
-        });
+        hops[0] = DEXAdapter.V2Hop({pair: address(pairAb), tokenIn: TOKEN_A, tokenOut: TOKEN_B, feeBps: 30});
 
         uint256 quote = harness.quoteV2(hops, 10 ether);
         uint256 expected = harness.computeAmountOut(10 ether, 1_000 ether, 1_500 ether, 30);
@@ -163,18 +155,8 @@ contract DEXAdapterTest is Test {
 
     function testQuoteV2RouteMultiHopAccumulates() public view {
         DEXAdapter.V2Hop[] memory hops = new DEXAdapter.V2Hop[](2);
-        hops[0] = DEXAdapter.V2Hop({
-            pair: address(pairAb),
-            tokenIn: TOKEN_A,
-            tokenOut: TOKEN_B,
-            feeBps: 30
-        });
-        hops[1] = DEXAdapter.V2Hop({
-            pair: address(pairBc),
-            tokenIn: TOKEN_B,
-            tokenOut: TOKEN_C,
-            feeBps: 10
-        });
+        hops[0] = DEXAdapter.V2Hop({pair: address(pairAb), tokenIn: TOKEN_A, tokenOut: TOKEN_B, feeBps: 30});
+        hops[1] = DEXAdapter.V2Hop({pair: address(pairBc), tokenIn: TOKEN_B, tokenOut: TOKEN_C, feeBps: 10});
 
         uint256 firstStep = harness.computeAmountOut(5 ether, 1_000 ether, 1_500 ether, 30);
         uint256 expected = harness.computeAmountOut(firstStep, 500 ether, 2_000 ether, 10);
@@ -185,12 +167,7 @@ contract DEXAdapterTest is Test {
 
     function testQuoteV2RouteRevertsOnTokenMismatch() public {
         DEXAdapter.V2Hop[] memory hops = new DEXAdapter.V2Hop[](1);
-        hops[0] = DEXAdapter.V2Hop({
-            pair: address(pairAb),
-            tokenIn: TOKEN_B,
-            tokenOut: TOKEN_C,
-            feeBps: 30
-        });
+        hops[0] = DEXAdapter.V2Hop({pair: address(pairAb), tokenIn: TOKEN_B, tokenOut: TOKEN_C, feeBps: 30});
 
         vm.expectRevert(DEXAdapter.TokenMismatch.selector);
         harness.quoteV2(hops, 1 ether);
@@ -207,21 +184,11 @@ contract DEXAdapterTest is Test {
 
     function testSelectBestRoutePrefersHighestNetAfterGas() public view {
         DEXAdapter.RouteCandidate[] memory candidates = new DEXAdapter.RouteCandidate[](3);
-        candidates[0] = DEXAdapter.RouteCandidate({
-            amountOut: 1 ether,
-            estimatedGas: 300_000,
-            router: address(0x1)
-        });
-        candidates[1] = DEXAdapter.RouteCandidate({
-            amountOut: 1050 ether / 1000,
-            estimatedGas: 600_000,
-            router: address(0x2)
-        });
-        candidates[2] = DEXAdapter.RouteCandidate({
-            amountOut: 1200 ether / 1000,
-            estimatedGas: 800_000,
-            router: address(0x3)
-        });
+        candidates[0] = DEXAdapter.RouteCandidate({amountOut: 1 ether, estimatedGas: 300_000, router: address(0x1)});
+        candidates[1] =
+            DEXAdapter.RouteCandidate({amountOut: 1050 ether / 1000, estimatedGas: 600_000, router: address(0x2)});
+        candidates[2] =
+            DEXAdapter.RouteCandidate({amountOut: 1200 ether / 1000, estimatedGas: 800_000, router: address(0x3)});
 
         uint256 gasPrice = 50 gwei;
         uint256 expectedCost = candidates[2].estimatedGas * gasPrice;
@@ -234,11 +201,8 @@ contract DEXAdapterTest is Test {
 
     function testSelectBestRouteRevertsWhenNoProfit() public {
         DEXAdapter.RouteCandidate[] memory candidates = new DEXAdapter.RouteCandidate[](1);
-        candidates[0] = DEXAdapter.RouteCandidate({
-            amountOut: 1 ether / 100,
-            estimatedGas: 600_000,
-            router: address(this)
-        });
+        candidates[0] =
+            DEXAdapter.RouteCandidate({amountOut: 1 ether / 100, estimatedGas: 600_000, router: address(this)});
 
         vm.expectRevert(DEXAdapter.NoProfitableRoute.selector);
         harness.selectBest(candidates, 30 gwei);

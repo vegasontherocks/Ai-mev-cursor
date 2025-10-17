@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.20;
 
-import { IQuoter, ISwapRouter, IUniswapV2Pair, IUniswapV2Router02 } from "./Interfaces.sol";
+import {IQuoter, ISwapRouter, IUniswapV2Pair, IUniswapV2Router02} from "./Interfaces.sol";
 
 /// @title DEXAdapter
 /// @notice Deterministic helpers for quoting and executing Polygon DEX routes.
@@ -29,12 +29,11 @@ library DEXAdapter {
         address router;
     }
 
-    function getAmountOutV2(
-        uint256 amountIn,
-        uint256 reserveIn,
-        uint256 reserveOut,
-        uint256 feeBasisPoints
-    ) internal pure returns (uint256) {
+    function getAmountOutV2(uint256 amountIn, uint256 reserveIn, uint256 reserveOut, uint256 feeBasisPoints)
+        internal
+        pure
+        returns (uint256)
+    {
         if (amountIn == 0) revert InvalidPath();
         if (reserveIn == 0 || reserveOut == 0) revert InvalidPath();
         if (feeBasisPoints >= BPS_DENOMINATOR) revert FeeTooHigh();
@@ -67,7 +66,7 @@ library DEXAdapter {
         IUniswapV2Pair pool = IUniswapV2Pair(pair);
         address token0 = pool.token0();
         address token1 = pool.token1();
-        (uint112 reserve0, uint112 reserve1, ) = pool.getReserves();
+        (uint112 reserve0, uint112 reserve1,) = pool.getReserves();
 
         if (tokenIn == token0 && tokenOut == token1) {
             reserveIn = reserve0;
@@ -93,19 +92,13 @@ library DEXAdapter {
         return swapExactTokensForTokensV2(router, path, amountIn, amountOutMin);
     }
 
-    function swapExactTokensForTokensV2(
-        address router,
-        address[] memory path,
-        uint256 amountIn,
-        uint256 amountOutMin
-    ) internal returns (uint256 amountOut) {
+    function swapExactTokensForTokensV2(address router, address[] memory path, uint256 amountIn, uint256 amountOutMin)
+        internal
+        returns (uint256 amountOut)
+    {
         if (path.length < 2) revert InvalidPath();
         uint256[] memory amounts = IUniswapV2Router02(router).swapExactTokensForTokens(
-            amountIn,
-            amountOutMin,
-            path,
-            address(this),
-            block.timestamp
+            amountIn, amountOutMin, path, address(this), block.timestamp
         );
 
         amountOut = amounts[amounts.length - 1];
@@ -135,12 +128,10 @@ library DEXAdapter {
         if (amountOut < amountOutMin) revert SlippageExceeded(amountOutMin, amountOut);
     }
 
-    function swapExactTokensForTokensV3(
-        address router,
-        bytes memory path,
-        uint256 amountIn,
-        uint256 amountOutMin
-    ) internal returns (uint256 amountOut) {
+    function swapExactTokensForTokensV3(address router, bytes memory path, uint256 amountIn, uint256 amountOutMin)
+        internal
+        returns (uint256 amountOut)
+    {
         ISwapRouter.ExactInputParams memory params = ISwapRouter.ExactInputParams({
             path: path,
             recipient: address(this),
@@ -153,13 +144,10 @@ library DEXAdapter {
         if (amountOut < amountOutMin) revert SlippageExceeded(amountOutMin, amountOut);
     }
 
-    function quoteSingleHopV3(
-        address quoter,
-        address tokenIn,
-        address tokenOut,
-        uint24 fee,
-        uint256 amountIn
-    ) internal returns (uint256) {
+    function quoteSingleHopV3(address quoter, address tokenIn, address tokenOut, uint24 fee, uint256 amountIn)
+        internal
+        returns (uint256)
+    {
         return IQuoter(quoter).quoteExactInputSingle(tokenIn, tokenOut, fee, amountIn, 0);
     }
 

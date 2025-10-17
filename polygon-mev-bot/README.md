@@ -62,6 +62,18 @@ The agent now supports both the local Polygon MCP server and Thirdweb’s hosted
 
 Refer to `docs/QUICK_START.md` for the command sequence and troubleshooting.
 
+### Quick Setup
+
+1. Copy the environment template and populate your secrets (never commit real keys):
+
+   ```bash
+   cp .env.example .env
+   # edit .env then follow quick commands below
+   ```
+
+2. Install dependencies in `eliza-agent-ai` and other JS workspaces before running the agent.
+
+
 ### Structured Execution Logs
 
 `eliza-agent-ai/src/actions/executeMEV.ts` now records JSON-formatted events for:

@@ -2,6 +2,7 @@ import { Action, IAgentRuntime, Memory, State, HandlerCallback } from "@ai16z/el
 import { elizaLogger } from "@ai16z/eliza";
 import { composeContext, generateText } from "@ai16z/eliza";
 import * as ort from 'onnxruntime-node';
+import { recordStrategyDecision } from "../metrics/agentMetrics.js";
 
 const strategyTemplate = `
 # MEV Strategy Selection
@@ -128,6 +129,12 @@ export const selectStrategyAction: Action = {
 
       // Parse final strategy
       const finalStrategy = parseStrategyDecision(strategyAnalysis, rlRecommendation);
+
+      recordStrategyDecision({
+        type: finalStrategy.type,
+        shouldExecute: finalStrategy.shouldExecute,
+        confidence: finalStrategy.confidence
+      });
 
       // Store decision in memory
       await runtime.messageManager.createMemory({

@@ -1,6 +1,10 @@
 import { Action, IAgentRuntime, Memory, State, HandlerCallback } from "@ai16z/eliza";
 import { elizaLogger } from "@ai16z/eliza";
 import { composeContext, generateText } from "@ai16z/eliza";
+import {
+  recordOpportunityAnalyzed,
+  recordOpportunityReadyForExecution
+} from "../metrics/agentMetrics.js";
 
 interface OpportunityData {
   type: 'ARBITRAGE' | 'JIT' | 'LIQUIDATION' | 'BACKRUN';
@@ -120,6 +124,8 @@ export const analyzeOpportunityAction: Action = {
       // Parse LLM decision
       const decision = parseLLMAnalysis(analysis);
 
+      recordOpportunityAnalyzed();
+
       // Store analysis in memory for future learning
       await runtime.messageManager.createMemory({
         userId: runtime.agentId,
@@ -138,6 +144,7 @@ export const analyzeOpportunityAction: Action = {
 
       // If AI says execute, trigger strategy selection
       if (decision.shouldExecute && decision.confidence >= 70) {
+        recordOpportunityReadyForExecution();
         await runtime.processActions(
           {
             userId: runtime.agentId,

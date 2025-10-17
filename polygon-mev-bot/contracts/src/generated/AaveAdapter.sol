@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.20;
 
-import { IPool } from "./Interfaces.sol";
+import {IPool} from "./Interfaces.sol";
 
 /// @title AaveAdapter
 /// @notice Utility helpers for inspecting and triggering Aave V3 liquidations on Polygon.
@@ -22,9 +22,9 @@ library AaveAdapter {
     }
 
     struct LiquidationParams {
-        uint256 closeFactorBps;        // Portion of the debt that can be repaid
-        uint256 liquidationBonusBps;   // Bonus on collateral expressed in basis points
-        uint256 minProfitBase;         // Minimum expected profit in Aave base currency
+        uint256 closeFactorBps; // Portion of the debt that can be repaid
+        uint256 liquidationBonusBps; // Bonus on collateral expressed in basis points
+        uint256 minProfitBase; // Minimum expected profit in Aave base currency
     }
 
     struct LiquidationQuote {
@@ -35,11 +35,7 @@ library AaveAdapter {
     }
 
     /// @notice Reads the current account metrics from the lending pool.
-    function getAccountSnapshot(IPool pool, address user)
-        internal
-        view
-        returns (AccountSnapshot memory snapshot)
-    {
+    function getAccountSnapshot(IPool pool, address user) internal view returns (AccountSnapshot memory snapshot) {
         (
             snapshot.totalCollateralBase,
             snapshot.totalDebtBase,

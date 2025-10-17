@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.20;
 
-import { Test } from "forge-std/Test.sol";
-import { AaveAdapter } from "../src/generated/AaveAdapter.sol";
+import {Test} from "forge-std/Test.sol";
+import {AaveAdapter} from "../src/generated/AaveAdapter.sol";
 
 contract AaveAdapterHarness {
     function quote(AaveAdapter.AccountSnapshot memory snapshot, AaveAdapter.LiquidationParams memory params)
@@ -66,12 +66,11 @@ contract AaveAdapterTest is Test {
         assertFalse(quote.profitable);
     }
 
-    function _buildSnapshot(
-        uint256 collateral,
-        uint256 debt,
-        uint256 availableBorrow,
-        uint256 healthFactor
-    ) internal pure returns (AaveAdapter.AccountSnapshot memory snapshot) {
+    function _buildSnapshot(uint256 collateral, uint256 debt, uint256 availableBorrow, uint256 healthFactor)
+        internal
+        pure
+        returns (AaveAdapter.AccountSnapshot memory snapshot)
+    {
         snapshot.totalCollateralBase = collateral;
         snapshot.totalDebtBase = debt;
         snapshot.availableBorrowsBase = availableBorrow;

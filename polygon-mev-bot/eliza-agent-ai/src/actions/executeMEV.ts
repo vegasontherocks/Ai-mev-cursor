@@ -3,6 +3,62 @@ import { elizaLogger } from "@ai16z/eliza";
 import { ethers } from "ethers";
 import { composeContext, generateText } from "@ai16z/eliza";
 import { Simulator } from "../utils/simulator.js";
+import ThirdwebMcpService from "../services/thirdwebMcpService.js";
+import {
+  recordDryRunSkip,
+  recordExecutionConfirmed,
+  recordExecutionFailure,
+  recordExecutionSubmitted
+} from "../metrics/agentMetrics.js";
+
+const MEV_EXECUTOR_ABI = [
+  {
+    inputs: [
+      {
+        internalType: "address[]",
+        name: "tokens",
+        type: "address[]"
+      },
+      {
+        internalType: "uint256[]",
+        name: "amounts",
+        type: "uint256[]"
+      },
+      {
+        internalType: "bytes",
+        name: "path",
+        type: "bytes"
+      }
+    ],
+    name: "executeArbitrage",
+    outputs: [],
+    stateMutability: "nonpayable",
+    type: "function"
+  }
+] as const;
+
+let thirdwebServicePromise: Promise<ThirdwebMcpService | null> | null = null;
+
+async function getThirdwebExecutionService(): Promise<ThirdwebMcpService | null> {
+  if (process.env.THIRDWEB_USE_MCP_EXECUTION !== "true" || !process.env.THIRDWEB_SECRET_KEY) {
+    return null;
+  }
+
+  if (!thirdwebServicePromise) {
+    thirdwebServicePromise = (async () => {
+      try {
+        const service = new ThirdwebMcpService();
+        await service.initialize();
+        return service;
+      } catch (error) {
+        elizaLogger.error("Failed to initialise Thirdweb MCP execution service", error);
+        return null;
+      }
+    })();
+  }
+
+  return thirdwebServicePromise;
+}
 
 type ExecutionLogLevel = "info" | "warn" | "error";
 
@@ -199,7 +255,9 @@ export const executeMEVAction: Action = {
 
       // Step 3: Build and send transaction
       elizaLogger.info("🚀 Building transaction...");
-      const transaction = await buildTransaction(runtime, opportunity, strategy, decision);
+      const preparedTx = await buildTransaction(runtime, opportunity, strategy, decision);
+      const transaction = preparedTx.request;
+      const contractCall = preparedTx.call;
 
       // Note: no tx hash before sending; log destination and gas params instead
       elizaLogger.info("📤 Prepared transaction to:", transaction.to);
@@ -223,9 +281,10 @@ export const executeMEVAction: Action = {
         await recordExecutionEvent(
           runtime,
           "DRY_RUN_SKIP",
-          { transaction, opportunity, strategy },
+          { transaction, contractCall, opportunity, strategy },
           "warn"
         );
+        recordDryRunSkip("execute action dry-run");
         if (callback) {
           callback({ text: 'DRY_RUN - transaction not sent', success: false });
         }
@@ -238,54 +297,125 @@ export const executeMEVAction: Action = {
         elizaLogger.error('Missing POLYGON_RPC_URL');
         return false;
       }
-      if (!process.env.PRIVATE_KEY) {
-        await recordFailedExecution(runtime, opportunity, strategy, 'Missing PRIVATE_KEY');
-        elizaLogger.error('Missing PRIVATE_KEY');
-        return false;
-      }
 
       const provider = new ethers.providers.JsonRpcProvider(process.env.POLYGON_RPC_URL);
-      const wallet = new ethers.Wallet(process.env.PRIVATE_KEY!, provider);
+      const useThirdwebExecution = process.env.THIRDWEB_USE_MCP_EXECUTION === 'true';
+      let txHash: string | undefined;
+      let thirdwebSubmissionId: string | undefined;
+  let submissionRecorded = false;
 
-      // Estimate gas if not set from simulation
-      if (!transaction.gasLimit) {
-        try {
-          const est = await wallet.estimateGas(transaction);
-          // add 20% headroom
-          transaction.gasLimit = est.mul(120).div(100);
-          elizaLogger.debug('⛽ Estimated gasLimit with headroom:', transaction.gasLimit.toString());
-        } catch (e) {
-          elizaLogger.warn('Gas estimation failed; proceeding without explicit gasLimit:', e);
+      if (useThirdwebExecution) {
+        const thirdwebService = await getThirdwebExecutionService();
+        if (thirdwebService) {
+          try {
+            const serverWallet = await thirdwebService.ensureServerWallet();
+            const submission = await thirdwebService.writeContract({
+              contractAddress: contractCall.contractAddress,
+              abi: contractCall.abi,
+              functionName: contractCall.functionName,
+              args: contractCall.args,
+              chainId: contractCall.chainId,
+              from: serverWallet,
+              value: contractCall.value ?? '0'
+            });
+
+            thirdwebSubmissionId = submission?.id || submission?.transactionId;
+            txHash = submission?.transactionHash || submission?.hash || submission?.txHash;
+
+            if (!txHash && thirdwebSubmissionId) {
+              const resolved = await thirdwebService.waitForTransaction(thirdwebSubmissionId);
+              txHash = resolved?.transactionHash || resolved?.hash;
+            }
+
+            if (!txHash) {
+              throw new Error('Thirdweb writeContract did not return a transaction hash');
+            }
+
+            await recordExecutionEvent(runtime, "TX_SUBMITTED", {
+              hash: txHash,
+              to: transaction.to,
+              maxFeePerGas: transaction.maxFeePerGas?.toString() ?? null,
+              maxPriorityFeePerGas: transaction.maxPriorityFeePerGas?.toString() ?? null,
+              gasLimit: transaction.gasLimit?.toString() ?? null,
+              thirdwebTransactionId: thirdwebSubmissionId ?? null
+            });
+            recordExecutionSubmitted();
+            submissionRecorded = true;
+          } catch (error) {
+            elizaLogger.error('Thirdweb MCP execution failed, falling back to direct signer', error);
+            txHash = undefined;
+            thirdwebSubmissionId = undefined;
+          }
+        } else {
+          elizaLogger.warn('Thirdweb MCP execution requested but service unavailable. Falling back to private key execution.');
         }
       }
 
-      const tx = await wallet.sendTransaction(transaction);
-      elizaLogger.info("⏳ Transaction sent:", tx.hash);
-      await recordExecutionEvent(runtime, "TX_SUBMITTED", {
-        hash: tx.hash,
-        to: transaction.to,
-        maxFeePerGas: transaction.maxFeePerGas?.toString() ?? null,
-        maxPriorityFeePerGas: transaction.maxPriorityFeePerGas?.toString() ?? null,
-        gasLimit: transaction.gasLimit?.toString() ?? null
-      });
+      let receipt: ethers.providers.TransactionReceipt;
 
-      // Step 4: Monitor execution
-      const receipt = await tx.wait();
+      if (!txHash) {
+        if (!process.env.PRIVATE_KEY) {
+          await recordFailedExecution(runtime, opportunity, strategy, 'Missing PRIVATE_KEY');
+          elizaLogger.error('Missing PRIVATE_KEY');
+          recordExecutionFailure('missing PRIVATE_KEY');
+          return false;
+        }
+
+        const wallet = new ethers.Wallet(process.env.PRIVATE_KEY!, provider);
+
+        // Estimate gas if not set from simulation
+        if (!transaction.gasLimit) {
+          try {
+            const est = await wallet.estimateGas(transaction);
+            // add 20% headroom
+            transaction.gasLimit = est.mul(120).div(100);
+            elizaLogger.debug('⛽ Estimated gasLimit with headroom:', transaction.gasLimit.toString());
+          } catch (e) {
+            elizaLogger.warn('Gas estimation failed; proceeding without explicit gasLimit:', e);
+          }
+        }
+
+        const tx = await wallet.sendTransaction(transaction);
+        recordExecutionSubmitted();
+        submissionRecorded = true;
+        txHash = tx.hash;
+        elizaLogger.info("⏳ Transaction sent:", tx.hash);
+        await recordExecutionEvent(runtime, "TX_SUBMITTED", {
+          hash: tx.hash,
+          to: transaction.to,
+          maxFeePerGas: transaction.maxFeePerGas?.toString() ?? null,
+          maxPriorityFeePerGas: transaction.maxPriorityFeePerGas?.toString() ?? null,
+          gasLimit: transaction.gasLimit?.toString() ?? null
+        });
+        receipt = await tx.wait();
+        recordExecutionConfirmed();
+      } else {
+        elizaLogger.info("⏳ Transaction submitted via Thirdweb:", txHash);
+        if (!submissionRecorded) {
+          recordExecutionSubmitted();
+          submissionRecorded = true;
+        }
+        receipt = await provider.waitForTransaction(txHash) as ethers.providers.TransactionReceipt;
+        if (!receipt) {
+          recordExecutionFailure('provider waitForTransaction returned null');
+          throw new Error('Failed to retrieve transaction receipt via provider');
+        }
+        recordExecutionConfirmed();
+      }
 
       const executionResult = {
         success: receipt.status === 1,
-        txHash: tx.hash,
+        txHash,
         gasUsed: receipt.gasUsed.toString(),
         blockNumber: receipt.blockNumber,
         profit: await calculateProfit(receipt, opportunity, strategy),
         timestamp: Date.now()
       };
 
-      elizaLogger.success(`✅ Transaction mined: ${tx.hash}`);
+      elizaLogger.success(`✅ Transaction mined: ${txHash}`);
       elizaLogger.success(`💰 Profit: ${executionResult.profit} MATIC`);
-  await recordExecutionEvent(runtime, "TX_MINED", executionResult);
+      await recordExecutionEvent(runtime, "TX_MINED", executionResult);
 
-      // Step 5: Learn from result
       await runtime.processActions(
         {
           userId: runtime.agentId,
@@ -358,7 +488,8 @@ async function simulateTransaction(
   try {
     // Build a candidate transaction for dry-run
     const decision = { action: 'EXECUTE' };
-    const tx = await buildTransaction(runtime, opportunity, strategy, decision);
+    const prepared = await buildTransaction(runtime, opportunity, strategy, decision);
+    const tx = prepared.request;
 
     // Determine simulator mode
     const useTenderly = !!process.env.TENDERLY_ACCESS_KEY && !!process.env.TENDERLY_USER && !!process.env.TENDERLY_PROJECT;
@@ -384,6 +515,17 @@ async function simulateTransaction(
         from = await tmpWallet.getAddress();
       }
     } catch { }
+
+    if (!from && process.env.THIRDWEB_USE_MCP_EXECUTION === 'true') {
+      try {
+        const thirdwebService = await getThirdwebExecutionService();
+        if (thirdwebService) {
+          from = await thirdwebService.ensureServerWallet();
+        }
+      } catch (error) {
+        elizaLogger.warn('Unable to derive Thirdweb server wallet for simulation', error);
+      }
+    }
 
     const simRes = await simulator.simulate({
       to: tx.to,
@@ -545,24 +687,34 @@ async function buildTransaction(
 
   const pathBytes = ethers.utils.defaultAbiCoder.encode(["address[]", "address[]"], [dexes, pathTokens]);
 
-  // MEVExecutor ABI fragment for executeArbitrage
-  const abi = [
-    "function executeArbitrage(address[] tokens, uint256[] amounts, bytes path)"
-  ];
-  const iface = new ethers.utils.Interface(abi);
+  const iface = new ethers.utils.Interface(MEV_EXECUTOR_ABI as any);
   const data = iface.encodeFunctionData("executeArbitrage", [tokens, amounts, pathBytes]);
 
   // Reasonable default gas params; simulator/estimator will refine
   const maxPriority = process.env.MAX_PRIORITY_FEE_GWEI ? ethers.utils.parseUnits(process.env.MAX_PRIORITY_FEE_GWEI, 'gwei') : ethers.utils.parseUnits('2', 'gwei');
   const maxFee = process.env.MAX_FEE_GWEI ? ethers.utils.parseUnits(process.env.MAX_FEE_GWEI, 'gwei') : ethers.utils.parseUnits('150', 'gwei');
 
-  return {
+  const request = {
     to: mevExecutor,
     data,
     value: 0,
     // gasLimit left undefined to allow estimateGas to set appropriately in simulation
     maxPriorityFeePerGas: maxPriority,
     maxFeePerGas: maxFee
+  };
+
+  const chainId = Number(process.env.THIRDWEB_CHAIN_ID || process.env.CHAIN_ID || "137");
+
+  return {
+    request,
+    call: {
+      contractAddress: mevExecutor,
+      abi: MEV_EXECUTOR_ABI,
+      functionName: "executeArbitrage",
+      args: [tokens, amounts, pathBytes],
+      chainId,
+      value: "0"
+    }
   };
 }
 

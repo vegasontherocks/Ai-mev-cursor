@@ -8,7 +8,10 @@ cache_path = "contracts/cache"
 
 # Polygon configuration
 chain_id = 137
-eth_rpc_url = "${POLYGON_RPC_URL}"
+# Use a sensible public Polygon RPC by default so `forge` doesn't fail when
+# POLYGON_RPC_URL is not set in the environment (CI/local dev can still
+# override by setting POLYGON_RPC_URL or FOUNDRY_ETH_RPC_URL).
+eth_rpc_url = "https://rpc.ankr.com/polygon"
 etherscan_api_key = "${POLYGONSCAN_API_KEY}"
 
 # Optimizer settings
@@ -27,7 +30,9 @@ tab_width = 4
 bracket_spacing = true
 
 [rpc_endpoints]
-polygon = "${POLYGON_RPC_URL}"
+# Primary endpoint used for forking when an explicit POLYGON_RPC_URL isn't
+# provided. Developers can still override this at runtime.
+polygon = "https://rpc.ankr.com/polygon"
 polygon_backup = "https://polygon-rpc.com"
 
 [etherscan]

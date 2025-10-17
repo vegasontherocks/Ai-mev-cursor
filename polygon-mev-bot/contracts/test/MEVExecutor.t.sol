@@ -1,15 +1,10 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.20;
 
-import { Test } from "forge-std/Test.sol";
-import { MEVExecutor } from "../src/generated/MEVExecutor.sol";
-import {
-    IERC20,
-    IFlashLoanRecipient,
-    IQuoter,
-    ISwapRouter,
-    IVault
-} from "../src/generated/Interfaces.sol";
+import {Test} from "forge-std/Test.sol";
+import {MEVExecutor} from "../src/generated/MEVExecutor.sol";
+import {IERC20, IFlashLoanRecipient, IQuoter, ISwapRouter, IVault} from "../src/generated/Interfaces.sol";
+import { AggregatorV3Interface } from "../src/generated/Interfaces.sol";
 
 contract MEVExecutorTest is Test {
     event Executed(MEVExecutor.Strategy indexed strategy, uint256 profit);
@@ -20,23 +15,31 @@ contract MEVExecutorTest is Test {
     MockERC20 public quoteToken;
     MockSwapRouter public router;
     MockQuoter public quoter;
+    MockAggregator public aggregator;
+    MockAggregator public aggregator2;
 
     function setUp() public {
         vault = new MockVault();
         baseToken = new MockERC20("Base Token", "BASE", 18);
         quoteToken = new MockERC20("Quote Token", "QUOTE", 18);
-    router = new MockSwapRouter();
-    quoter = new MockQuoter();
+        router = new MockSwapRouter();
+        quoter = new MockQuoter();
 
         baseToken.setMinter(address(this), true);
-    baseToken.setMinter(address(router), true);
-    quoteToken.setMinter(address(router), true);
-    quoteToken.setMinter(address(this), true);
+        baseToken.setMinter(address(router), true);
+        quoteToken.setMinter(address(router), true);
+        quoteToken.setMinter(address(this), true);
 
         baseToken.mint(address(vault), 1_000 ether);
 
         executor = new MEVExecutor(address(vault));
         vault.setExpectedRecipient(address(executor));
+        aggregator = new MockAggregator();
+        aggregator.setLatestAnswer(int256(12e17)); // 1.2 * 1e18 to match quoted route in tests
+        aggregator2 = new MockAggregator();
+        aggregator2.setLatestAnswer(int256(118e16)); // 1.18 * 1e18 a slightly different feed
+        executor.setPriceFeed(address(baseToken), AggregatorV3Interface(address(aggregator)));
+        executor.addPriceFeed(address(baseToken), AggregatorV3Interface(address(aggregator2)));
     }
 
     function testDeployment() public view {
@@ -59,7 +62,7 @@ contract MEVExecutorTest is Test {
 
     function testReceiveETH() public {
         uint256 balanceBefore = address(executor).balance;
-        (bool success, ) = address(executor).call{value: 1 ether}("");
+        (bool success,) = address(executor).call{value: 1 ether}("");
         assertTrue(success);
 
         uint256 balanceAfter = address(executor).balance;
@@ -69,7 +72,7 @@ contract MEVExecutorTest is Test {
     function testSetCircuitBreakerConfig() public {
         executor.setCircuitBreakerConfig(0.02 ether, 0.2 ether, 6 ether);
 
-    MEVExecutor.CircuitBreaker memory circuit = _getCircuitBreaker();
+        MEVExecutor.CircuitBreaker memory circuit = _getCircuitBreaker();
         assertEq(circuit.minProfit, 0.02 ether);
         assertEq(circuit.maxLoss, 0.2 ether);
         assertEq(circuit.dailyLimit, 6 ether);
@@ -211,14 +214,8 @@ contract MEVExecutorTest is Test {
     }
 
     function _getCircuitBreaker() internal view returns (MEVExecutor.CircuitBreaker memory circuit) {
-        (
-            circuit.minProfit,
-            circuit.maxLoss,
-            circuit.dailyLimit,
-            circuit.dailyLoss,
-            circuit.lastReset,
-            circuit.paused
-        ) = executor.cb();
+        (circuit.minProfit, circuit.maxLoss, circuit.dailyLimit, circuit.dailyLoss, circuit.lastReset, circuit.paused) =
+            executor.cb();
     }
 }
 
@@ -255,12 +252,12 @@ contract MockVault is IVault {
         }
     }
 
-    function swap(
-        SingleSwap memory,
-        FundManagement memory,
-        uint256,
-        uint256
-    ) external pure override returns (uint256) {
+    function swap(SingleSwap memory, FundManagement memory, uint256, uint256)
+        external
+        pure
+        override
+        returns (uint256)
+    {
         revert("swap-not-implemented");
     }
 }
@@ -346,13 +343,12 @@ contract MockQuoter is IQuoter {
         singleQuotes[key] = amountOut;
     }
 
-    function quoteExactInputSingle(
-        address tokenIn,
-        address tokenOut,
-        uint24 fee,
-        uint256 amountIn,
-        uint160
-    ) external view override returns (uint256 amountOut) {
+    function quoteExactInputSingle(address tokenIn, address tokenOut, uint24 fee, uint256 amountIn, uint160)
+        external
+        view
+        override
+        returns (uint256 amountOut)
+    {
         bytes32 key = keccak256(abi.encode(tokenIn, tokenOut, fee, amountIn));
         amountOut = singleQuotes[key];
         require(amountOut != 0, "quote-missing");
@@ -361,6 +357,23 @@ contract MockQuoter is IQuoter {
     function quoteExactInput(bytes memory path, uint256) external view override returns (uint256 amountOut) {
         amountOut = exactInputQuotes[path];
         require(amountOut != 0, "quote-missing");
+    }
+}
+
+contract MockAggregator {
+    int256 private latest;
+    uint8 private dec = 18;
+
+    function setLatestAnswer(int256 a) external {
+        latest = a;
+    }
+
+    function latestRoundData() external view returns (uint80, int256, uint256, uint256, uint80) {
+        return (uint80(1), latest, uint256(0), block.timestamp, uint80(1));
+    }
+
+    function decimals() external view returns (uint8) {
+        return dec;
     }
 }
 
@@ -390,12 +403,9 @@ contract MockSwapRouter is ISwapRouter {
         singleConfigs[key] = SingleConfig({amountOut: amountOut, tokenOut: tokenOut});
     }
 
-    function setExactInputPathConfig(
-        bytes memory path,
-        address tokenIn,
-        address tokenOut,
-        uint256 amountOut
-    ) external {
+    function setExactInputPathConfig(bytes memory path, address tokenIn, address tokenOut, uint256 amountOut)
+        external
+    {
         bytes32 key = keccak256(path);
         pathConfigs[key] = PathConfig({amountOut: amountOut, tokenIn: tokenIn, tokenOut: tokenOut});
     }
@@ -410,24 +420,19 @@ contract MockSwapRouter is ISwapRouter {
         SingleConfig memory config = singleConfigs[key];
         require(config.amountOut != 0, "config-missing");
 
-    bool pulled = MockERC20(params.tokenIn).transferFrom(msg.sender, address(this), params.amountIn);
-    require(pulled, "transfer-failed");
+        bool pulled = MockERC20(params.tokenIn).transferFrom(msg.sender, address(this), params.amountIn);
+        require(pulled, "transfer-failed");
         MockERC20(config.tokenOut).mint(params.recipient, config.amountOut);
         amountOut = config.amountOut;
     }
 
-    function exactInput(ExactInputParams calldata params)
-        external
-        payable
-        override
-        returns (uint256 amountOut)
-    {
+    function exactInput(ExactInputParams calldata params) external payable override returns (uint256 amountOut) {
         bytes32 key = keccak256(params.path);
         PathConfig memory config = pathConfigs[key];
         require(config.amountOut != 0, "config-missing");
 
-    bool pulled = MockERC20(config.tokenIn).transferFrom(msg.sender, address(this), params.amountIn);
-    require(pulled, "transfer-failed");
+        bool pulled = MockERC20(config.tokenIn).transferFrom(msg.sender, address(this), params.amountIn);
+        require(pulled, "transfer-failed");
         MockERC20(config.tokenOut).mint(params.recipient, config.amountOut);
         amountOut = config.amountOut;
     }

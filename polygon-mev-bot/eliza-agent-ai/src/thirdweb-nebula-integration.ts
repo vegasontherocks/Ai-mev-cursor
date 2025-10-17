@@ -569,6 +569,7 @@ Return only the Solidity code, optionally wrapped in a solidity code block.`;
 export class ThirdwebMCPIntegration {
   private thirdwebEndpoint?: string;
   private initialized = false;
+  private availableTools: Set<string> | null = null;
   
   async initialize() {
     if (this.initialized) {
@@ -610,10 +611,77 @@ export class ThirdwebMCPIntegration {
       }
 
       this.thirdwebEndpoint = endpoint;
+      await this.refreshToolCache();
       this.initialized = true;
       elizaLogger.success("✅ Thirdweb MCP endpoint configured");
     } catch (error) {
       elizaLogger.error("Failed to load MCP configuration", error);
+    }
+  }
+
+  private async refreshToolCache(force = false) {
+    if (!this.thirdwebEndpoint) {
+      return;
+    }
+
+    if (!force && this.availableTools) {
+      return;
+    }
+
+    const url = new URL(this.thirdwebEndpoint);
+    const startedAt = Date.now();
+
+    try {
+      const response = await fetch(url, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          jsonrpc: "2.0",
+          id: Date.now(),
+          method: "tools/list",
+          params: {}
+        })
+      });
+
+      if (!response.ok) {
+        elizaLogger.warn(`⚠️  Unable to list MCP tools (${response.status} ${response.statusText})`);
+        return;
+      }
+
+      const payload = await response.json().catch(async () => {
+        const raw = await response.text();
+        throw new Error(`Unexpected tools/list response: ${raw}`);
+      });
+
+      if (payload?.error) {
+        elizaLogger.warn(`⚠️  tools/list returned error: ${payload.error.message || payload.error}`);
+        this.availableTools = null;
+        return;
+      }
+
+      const toolsArray = Array.isArray(payload?.result?.tools)
+        ? payload.result.tools
+        : [];
+
+      if (!Array.isArray(toolsArray) || toolsArray.length === 0) {
+        elizaLogger.warn("⚠️  Thirdweb MCP returned no tool metadata; continuing without cache");
+        this.availableTools = null;
+        return;
+      }
+
+      this.availableTools = new Set(
+        toolsArray
+          .map((tool: any) => (typeof tool === "string" ? tool : tool?.name))
+          .filter((name: string | undefined): name is string => typeof name === "string" && name.length > 0)
+      );
+
+      elizaLogger.info(`🧰 Thirdweb MCP tools available (${this.availableTools.size}): ${Array.from(this.availableTools).join(", ")}`);
+      elizaLogger.debug(`listTools latency: ${Date.now() - startedAt}ms`);
+    } catch (error) {
+      elizaLogger.warn("⚠️  Failed to refresh MCP tool cache", error);
+      this.availableTools = null;
     }
   }
   
@@ -629,7 +697,16 @@ export class ThirdwebMCPIntegration {
       throw new Error("Thirdweb MCP endpoint is not configured. Ensure THIRDWEB_SECRET_KEY is set and mcp-config.json has a 'thirdweb' entry.");
     }
 
+    await this.refreshToolCache();
+
+    const normalizedTool = (toolName || "").trim();
     const url = new URL(this.thirdwebEndpoint);
+    if (normalizedTool.length > 0) {
+      url.searchParams.set("tools", normalizedTool);
+      if (this.availableTools && !this.availableTools.has(normalizedTool)) {
+        elizaLogger.warn(`⚠️  MCP tool '${normalizedTool}' not reported by tools/list; attempting call anyway`);
+      }
+    }
     const startedAt = Date.now();
 
     try {
@@ -639,9 +716,13 @@ export class ThirdwebMCPIntegration {
           "Content-Type": "application/json"
         },
         body: JSON.stringify({
-          type: "callTool",
-          toolName,
-          arguments: params ?? {}
+          jsonrpc: "2.0",
+          id: Date.now(),
+          method: "tools/call",
+          params: {
+            name: normalizedTool,
+            arguments: params ?? {}
+          }
         })
       });
 
@@ -653,12 +734,35 @@ export class ThirdwebMCPIntegration {
         throw new Error(`MCP tool ${toolName} failed: ${errorText}`);
       }
 
-      const result = await response.json();
+      const rawResult = await response.json().catch(async () => {
+        const raw = await response.text();
+        throw new Error(`Unexpected response format: ${raw}`);
+      });
+
+      if (rawResult?.error) {
+        throw new Error(`MCP tool ${toolName} error: ${rawResult.error.message || JSON.stringify(rawResult.error)}`);
+      }
+
+      const content = rawResult?.result?.content;
+      let normalizedResult: any = rawResult?.result;
+
+      if (Array.isArray(content)) {
+        const textChunk = content.find((chunk: any) => typeof chunk?.text === "string")?.text;
+        if (textChunk) {
+          try {
+            normalizedResult = JSON.parse(textChunk);
+          } catch {
+            normalizedResult = textChunk;
+          }
+        }
+      }
+
       elizaLogger.info(`🔧 MCP tool ${toolName} completed in ${latency}ms`);
       return {
         success: true,
         latency,
-        result
+        result: normalizedResult,
+        raw: rawResult
       };
     } catch (error) {
       elizaLogger.error(`Error calling Thirdweb MCP tool ${toolName}`, error);

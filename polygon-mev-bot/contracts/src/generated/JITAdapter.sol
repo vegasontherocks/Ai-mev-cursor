@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.20;
 
-import { INonfungiblePositionManager } from "./Interfaces.sol";
+import {INonfungiblePositionManager} from "./Interfaces.sol";
 
 /// @title JITAdapter
 /// @notice Lightweight helpers for managing temporary Uniswap V3 liquidity positions.
@@ -38,11 +38,11 @@ library JITAdapter {
     }
 
     /// @notice Returns a symmetric range around the current tick constrained by spacing and bounds.
-    function computeCenteredRange(
-        int24 currentTick,
-        int24 tickSpacing,
-        int24 halfWidth
-    ) internal pure returns (int24 lower, int24 upper) {
+    function computeCenteredRange(int24 currentTick, int24 tickSpacing, int24 halfWidth)
+        internal
+        pure
+        returns (int24 lower, int24 upper)
+    {
         int24 center = nearestUsableTick(currentTick, tickSpacing);
         int24 spacedHalfSteps = halfWidth / tickSpacing;
         int24 spacedHalf = spacedHalfSteps * tickSpacing;
@@ -59,10 +59,10 @@ library JITAdapter {
     /// @notice Validates that the provided ticks form a valid position for the given spacing.
     function validateTickRange(int24 tickLower, int24 tickUpper, int24 tickSpacing) internal pure {
         require(tickLower < tickUpper, "range");
-    int24 lowerQuotient = tickLower / tickSpacing;
-    int24 upperQuotient = tickUpper / tickSpacing;
-    int24 lowerAligned = lowerQuotient * tickSpacing;
-    int24 upperAligned = upperQuotient * tickSpacing;
+        int24 lowerQuotient = tickLower / tickSpacing;
+        int24 upperQuotient = tickUpper / tickSpacing;
+        int24 lowerAligned = lowerQuotient * tickSpacing;
+        int24 upperAligned = upperQuotient * tickSpacing;
         require(lowerAligned == tickLower, "lower-spacing");
         require(upperAligned == tickUpper, "upper-spacing");
         require(tickLower >= MIN_TICK && tickUpper <= MAX_TICK, "bounds");
@@ -90,11 +90,10 @@ library JITAdapter {
     }
 
     /// @notice Mints a temporary concentrated liquidity position.
-    function mintPosition(
-        INonfungiblePositionManager manager,
-        PositionConfig memory config,
-        address recipient
-    ) internal returns (MintResult memory result) {
+    function mintPosition(INonfungiblePositionManager manager, PositionConfig memory config, address recipient)
+        internal
+        returns (MintResult memory result)
+    {
         require(config.token0 != address(0) && config.token1 != address(0), "token=0");
         validateTickRange(config.tickLower, config.tickUpper, tickSpacingForFee(config.fee));
         INonfungiblePositionManager.MintParams memory params = INonfungiblePositionManager.MintParams({
@@ -117,13 +116,13 @@ library JITAdapter {
     }
 
     /// @notice Withdraws liquidity and collects accrued fees in a single step.
-    function withdrawPosition(
-        INonfungiblePositionManager manager,
-        uint256 tokenId,
-        uint128 liquidity
-    ) internal returns (uint256 amount0, uint256 amount1) {
+    function withdrawPosition(INonfungiblePositionManager manager, uint256 tokenId, uint128 liquidity)
+        internal
+        returns (uint256 amount0, uint256 amount1)
+    {
         if (liquidity > 0) {
-            INonfungiblePositionManager.DecreaseLiquidityParams memory decreaseParams = INonfungiblePositionManager.DecreaseLiquidityParams({
+            INonfungiblePositionManager.DecreaseLiquidityParams memory decreaseParams = INonfungiblePositionManager
+                .DecreaseLiquidityParams({
                 tokenId: tokenId,
                 liquidity: liquidity,
                 amount0Min: 0,

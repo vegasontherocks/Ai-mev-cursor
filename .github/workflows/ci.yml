@@ -1,0 +1,53 @@
+name: CI
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  solidity:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Foundry
+        run: |
+          curl -L https://foundry.paradigm.xyz | bash -s -- -y
+          export PATH="$HOME/.foundry/bin:$PATH"
+          foundryup || true
+      - name: Build & Test Contracts
+        run: |
+          export PATH="$HOME/.foundry/bin:$PATH"
+          cd polygon-mev-bot/contracts
+          forge build
+          forge test -vv
+
+  node:
+    runs-on: ubuntu-latest
+    needs: solidity
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install deps
+        run: |
+          cd polygon-mev-bot/eliza-agent-ai
+          npm ci
+      - name: Type check / build
+        run: |
+          cd polygon-mev-bot/eliza-agent-ai
+          npm run build
+      - name: Preflight simulation (optional)
+        env:
+          POLYGON_RPC_URL: ${{ secrets.POLYGON_RPC_URL }}
+          MEV_EXECUTOR_ADDRESS: ${{ secrets.MEV_EXECUTOR_ADDRESS }}
+        run: |
+          cd polygon-mev-bot/eliza-agent-ai
+          if [ -n "$POLYGON_RPC_URL" ] && [ -n "$MEV_EXECUTOR_ADDRESS" ]; then
+            npm run preflight:sim || true
+          else
+            echo "Skipping preflight: missing RPC or contract address"
+          fi

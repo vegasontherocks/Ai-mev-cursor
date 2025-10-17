@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.20;
 
-import { Test } from "forge-std/Test.sol";
-import { JITAdapter } from "../src/generated/JITAdapter.sol";
-import { INonfungiblePositionManager } from "../src/generated/Interfaces.sol";
+import {Test} from "forge-std/Test.sol";
+import {JITAdapter} from "../src/generated/JITAdapter.sol";
+import {INonfungiblePositionManager} from "../src/generated/Interfaces.sol";
 
 contract DummyPositionManager is INonfungiblePositionManager {
     uint256 private nextTokenId = 1;

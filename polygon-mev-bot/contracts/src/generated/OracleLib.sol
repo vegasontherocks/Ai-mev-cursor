@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.20;
 
-import { AggregatorV3Interface } from "./Interfaces.sol";
+import {AggregatorV3Interface} from "./Interfaces.sol";
 
 /// @title OracleLib
 /// @notice Chainlink-oriented validation helpers to defend against stale or manipulated prices.
@@ -20,17 +20,8 @@ library OracleLib {
     }
 
     /// @notice Fetches the latest price with a custom max staleness window.
-    function readPrice(
-        AggregatorV3Interface feed,
-        uint256 maxStaleness
-    ) internal view returns (uint256 price) {
-        (
-            uint80 roundId,
-            int256 answer,
-            ,
-            uint256 updatedAt,
-            uint80 answeredInRound
-        ) = feed.latestRoundData();
+    function readPrice(AggregatorV3Interface feed, uint256 maxStaleness) internal view returns (uint256 price) {
+        (uint80 roundId, int256 answer,, uint256 updatedAt, uint80 answeredInRound) = feed.latestRoundData();
 
         if (answer <= 0 || answeredInRound < roundId) revert OracleResponseInvalid();
         if (updatedAt == 0) revert OracleResponseInvalid();
@@ -42,11 +33,7 @@ library OracleLib {
     }
 
     /// @notice Verifies that the DEX spot price matches the oracle price within a deviation budget.
-    function validateDeviation(
-        uint256 oraclePrice,
-        uint256 spotPrice,
-        uint256 maxDeviationBps
-    ) internal pure {
+    function validateDeviation(uint256 oraclePrice, uint256 spotPrice, uint256 maxDeviationBps) internal pure {
         if (oraclePrice == 0 || spotPrice == 0) revert OracleResponseInvalid();
         uint256 diff = oraclePrice > spotPrice ? oraclePrice - spotPrice : spotPrice - oraclePrice;
         uint256 allowed = (oraclePrice * maxDeviationBps) / BPS_DENOMINATOR;

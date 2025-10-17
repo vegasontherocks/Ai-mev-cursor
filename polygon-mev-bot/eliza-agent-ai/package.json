@@ -10,7 +10,16 @@
     "build": "tsc",
     "mcp": "npx -y @thirdweb-dev/mcp-server",
     "smoke:encode": "ts-node --esm src/utils/smokeEncode.ts",
-    "smoke:mcp": "ts-node --esm src/scripts/smokeMcp.ts"
+    "preflight:sim": "ts-node --esm src/utils/preflightSim.ts",
+    "build:prod": "tsc -p tsconfig.json",
+    "start:prod:direct": "node dist/index.js",
+    "start:prod": "node scripts/autoStartAndRunDiag.mjs",
+    "debug:quotes": "ts-node --esm src/scripts/debugQuotes.ts",
+    "compare:adapters": "node scripts/compareAdapters.mjs",
+    "telemetry:show": "node scripts/showQuoteTelemetry.mjs",
+    "smoke:mcp": "node --loader ts-node/esm src/scripts/smokeMcp.ts",
+    "thirdweb:wallet": "node --loader ts-node/esm src/scripts/thirdwebServerWalletDemo.ts",
+    "canary:run": "node dist/utils/canaryRun.js"
   },
   "dependencies": {
     "@ai16z/eliza": "^0.1.4",

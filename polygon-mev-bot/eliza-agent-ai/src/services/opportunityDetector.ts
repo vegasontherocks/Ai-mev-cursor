@@ -1,36 +1,15 @@
 import { IAgentRuntime, elizaLogger } from "@ai16z/eliza";
-import { ethers } from "ethers";
-import type { BigNumber } from "ethers";
+import { BigNumber, ethers } from "ethers";
 import { EventEmitter } from "events";
+import type { ArbitrageCandidate, DexConfig, DexQuote, DexType, TokenConfig } from "../types/mev.js";
+import DirectRpcQuoteAdapter from "../adapters/DirectRpcQuoteAdapter.js";
+import ThirdwebQuoteAdapter from "../adapters/ThirdwebQuoteAdapter.js";
+import type IQuoteAdapter from "../adapters/QuoteAdapter.js";
 
 const UNISWAP_V3_QUOTER = "0xb27308f9F90D607463bb33eA1BeBb41C27CE5AB6";
-
-interface TokenConfig {
-  symbol: string;
-  address: string;
-  decimals: number;
-}
-
-interface DexConfig {
-  name: string;
-  router: string;
-  factory?: string;
-  priority?: number;
-}
-
-interface ArbitrageOpportunity {
-  type: "ARBITRAGE";
-  source: "opportunity_detector";
-  tokenIn: TokenConfig;
-  tokenOut: TokenConfig;
-  buyDex: string;
-  sellDex: string;
-  buyPrice: number;
-  sellPrice: number;
-  spread: number;
-  expectedProfitTokenOut: number;
-  timestamp: number;
-}
+const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000";
+const DEFAULT_V2_FEE_BPS = 30; // 0.30%
+const MIN_REEMIT_INTERVAL_MS = 30_000;
 
 export class OpportunityDetector extends EventEmitter {
   private runtime: IAgentRuntime;
@@ -39,37 +18,70 @@ export class OpportunityDetector extends EventEmitter {
   private isRunning: boolean = false;
   private scanInterval: NodeJS.Timeout | null = null;
   private lastEmitted: Map<string, number> = new Map();
-  private readonly minReemitIntervalMs = 30000;
-  
-  constructor(runtime: IAgentRuntime, settings: any) {
+  private dexes: DexConfig[] = [];
+  private tokens: TokenConfig[] = [];
+  private adapter: IQuoteAdapter;
+  private readonly minProfitThreshold: number;
+  private readonly maxPositionSize: number;
+  private readonly slippageTolerance: number;
+
+  constructor(runtime: IAgentRuntime, settings: any, adapter?: IQuoteAdapter) {
     super();
     this.runtime = runtime;
     this.settings = settings;
-    
+
     this.provider = new ethers.providers.JsonRpcProvider(
       settings.blockchain.rpcUrl
     );
+
+    // adapter selection
+    if (adapter) {
+      this.adapter = adapter;
+    } else if (settings.mev?.useThirdwebAdapter) {
+      this.adapter = new ThirdwebQuoteAdapter(this.provider);
+    } else {
+      this.adapter = new DirectRpcQuoteAdapter(this.provider);
+    }
+
+    this.dexes = (settings.mev?.dexes || []).map((dex: any) => ({
+      ...dex,
+      type: this.classifyDex(dex)
+    }));
+
+    this.tokens = (settings.mev?.tokens || []).map((token: any) => ({
+      symbol: token.symbol,
+      address: ethers.utils.getAddress(token.address),
+      decimals: token.decimals
+    }));
+
+    this.minProfitThreshold = Number(settings.mev?.minProfitThreshold ?? 0.01);
+    this.maxPositionSize = Number(settings.mev?.maxPositionSize ?? 1);
+    this.slippageTolerance = Number(settings.mev?.slippageTolerance ?? 0.005);
   }
-  
+
   async start() {
     elizaLogger.info("🎯 Starting opportunity detector...");
-    
+
     this.isRunning = true;
-    
+
+    try {
+      elizaLogger.info(`Quote adapter: ${this.adapter?.name ? this.adapter.name() : 'direct-rpc'}`);
+    } catch { }
+
     // Scan for arbitrage opportunities every 15 seconds
     this.scanInterval = setInterval(async () => {
       if (!this.isRunning) return;
-      
+
       try {
         await this.scanArbitrage();
       } catch (error) {
         elizaLogger.error("Error scanning arbitrage:", error);
       }
     }, 15000);
-    
+
     elizaLogger.success("✅ Opportunity detector active");
   }
-  
+
   async stop() {
     elizaLogger.info("🛑 Stopping opportunity detector...");
     this.isRunning = false;
@@ -77,106 +89,133 @@ export class OpportunityDetector extends EventEmitter {
       clearInterval(this.scanInterval);
     }
   }
-  
+
   private async scanArbitrage() {
-    const strategies = this.settings.mev.strategies;
-    if (!strategies.ARBITRAGE.enabled) return;
-    
-    elizaLogger.debug("🔍 Scanning for arbitrage opportunities...");
-    
-    // Scan token pairs across DEXs
-  const tokens: TokenConfig[] = this.settings.mev.tokens;
-  const dexes: DexConfig[] = this.settings.mev.dexes;
-    
-    for (let i = 0; i < tokens.length; i++) {
-      for (let j = i + 1; j < tokens.length; j++) {
-        const tokenA = tokens[i];
-        const tokenB = tokens[j];
-        
-        // Get prices from all DEXs
-        const quotes = await Promise.all(
-          dexes.map(async (dex) => {
-            const price = await this.getPrice(dex, tokenA, tokenB);
-            return price ? { dex, price } : null;
-          })
-        );
+    if (!this.settings.mev?.strategies?.ARBITRAGE?.enabled) {
+      return;
+    }
 
-        const validQuotes = quotes.filter(
-          (q): q is { dex: DexConfig; price: number } =>
-            q !== null && Number.isFinite(q.price) && q.price > 0
-        );
+    elizaLogger.debug("🔍 Scanning for arbitrage loops...");
 
-        if (validQuotes.length < 2) {
-          continue;
-        }
+    const now = Date.now();
+    for (const dex of this.dexes) {
+      for (const flashToken of this.tokens) {
+        for (const targetToken of this.tokens) {
+          if (flashToken.address === targetToken.address) continue;
 
-        const sortedQuotes = [...validQuotes].sort((a, b) => a.price - b.price);
-        const bestBuy = sortedQuotes[0];
-        const bestSell = sortedQuotes[sortedQuotes.length - 1];
+          try {
+            const quote = await this.evaluateLoop(dex, flashToken, targetToken);
+            if (!quote) continue;
 
-        if (bestBuy.price <= 0) {
-          continue;
-        }
+            const spread = quote.price - 1;
+            if (spread < this.minProfitThreshold) continue;
 
-        const priceDiff = (bestSell.price - bestBuy.price) / bestBuy.price;
-        
-        // Check if profitable
-        if (priceDiff > strategies.ARBITRAGE.minPriceDiff) {
-          const opportunity: ArbitrageOpportunity = {
-            type: "ARBITRAGE",
-            source: "opportunity_detector",
-            tokenIn: tokenA,
-            tokenOut: tokenB,
-            buyDex: bestBuy.dex.name,
-            sellDex: bestSell.dex.name,
-            buyPrice: bestBuy.price,
-            sellPrice: bestSell.price,
-            spread: priceDiff,
-            expectedProfitTokenOut: bestSell.price - bestBuy.price,
-            timestamp: Date.now()
-          };
+            const candidate: ArbitrageCandidate = {
+              id: `${dex.name}:${flashToken.address}:${targetToken.address}`,
+              flashToken,
+              targetToken,
+              quote,
+              spread,
+              expectedProfit: spread,
+              timestamp: now
+            };
 
-          if (this.shouldEmit(opportunity)) {
+            if (!this.shouldEmit(candidate)) {
+              continue;
+            }
+
             elizaLogger.info(
-              `🎯 Arbitrage: buy ${tokenA.symbol} on ${bestBuy.dex.name} at ${bestBuy.price.toFixed(6)} ${tokenB.symbol} and sell on ${bestSell.dex.name} at ${bestSell.price.toFixed(6)} (${(priceDiff * 100).toFixed(2)}% spread)`
+              `🎯 Arbitrage loop on ${dex.name}: borrow ${flashToken.symbol}, swap through ${targetToken.symbol}, expected multiplier ${(quote.price).toFixed(4)} (spread ${(spread * 100).toFixed(2)}%)`
             );
 
-            this.emit("opportunity", opportunity);
+            this.emit("opportunity", candidate);
+          } catch (error) {
+            // ignore
           }
         }
       }
     }
   }
-  
-  private async getPrice(dex: DexConfig, tokenIn: TokenConfig, tokenOut: TokenConfig): Promise<number | null> {
-    try {
-      const amountIn = ethers.utils.parseUnits("1", tokenIn.decimals);
 
-      if (dex.name.toLowerCase().includes("uniswapv3")) {
-        return await this.getUniswapV3Quote(tokenIn, tokenOut, amountIn);
+  private classifyDex(dex: any): DexType {
+    const name = (dex?.name || "").toLowerCase();
+    if (name.includes("v3")) {
+      return "uniswap_v3";
+    }
+
+    return "uniswap_v2";
+  }
+
+  private async evaluateLoop(dex: DexConfig, flashToken: TokenConfig, targetToken: TokenConfig): Promise<DexQuote | null> {
+    try {
+      const amountIn = this.sampleAmount(flashToken.decimals);
+
+      if (dex.type === "uniswap_v3") {
+        const amountOut1 = await this.adapter.getUniswapV3Quote(UNISWAP_V3_QUOTER, flashToken.address, targetToken.address, amountIn);
+        if (!amountOut1 || amountOut1.isZero()) return null;
+
+        const amountOut2 = await this.adapter.getUniswapV3Quote(UNISWAP_V3_QUOTER, targetToken.address, flashToken.address, amountOut1);
+        if (!amountOut2 || amountOut2.isZero()) return null;
+
+        if (amountOut2.lte(amountIn)) return null;
+
+        const amountInFloat = parseFloat(ethers.utils.formatUnits(amountIn, flashToken.decimals));
+        const amountOutFloat = parseFloat(ethers.utils.formatUnits(amountOut2, flashToken.decimals));
+        const priceMultiplier = amountOutFloat / amountInFloat;
+
+        return {
+          dex,
+          routeType: "uniswap_v3",
+          router: dex.router,
+          quoter: UNISWAP_V3_QUOTER,
+          tokens: [flashToken.address, targetToken.address, flashToken.address],
+          fees: [DEFAULT_V2_FEE_BPS, DEFAULT_V2_FEE_BPS],
+          price: priceMultiplier,
+          amountOut: amountOut2
+        };
       }
 
-      const routerContract = new ethers.Contract(
-        dex.router,
-        [
-          "function getAmountsOut(uint256 amountIn, address[] calldata path) external view returns (uint256[] memory)"
-        ],
-        this.provider
-      );
-
-      const amounts: BigNumber[] = await routerContract.getAmountsOut(amountIn, [
-        tokenIn.address,
-        tokenOut.address
+      const amounts: BigNumber[] = await this.adapter.getAmountsOut(dex.router, amountIn, [
+        flashToken.address,
+        targetToken.address,
+        flashToken.address
       ]);
 
-      return parseFloat(ethers.utils.formatUnits(amounts[1], tokenOut.decimals));
+      const finalAmount = amounts[amounts.length - 1];
+      if (finalAmount.lte(amountIn)) return null;
+
+      const amountInFloat = parseFloat(ethers.utils.formatUnits(amountIn, flashToken.decimals));
+      const amountOutFloat = parseFloat(ethers.utils.formatUnits(finalAmount, flashToken.decimals));
+      const price = amountOutFloat / amountInFloat;
+
+      return {
+        dex,
+        routeType: "uniswap_v2",
+        router: dex.router,
+        quoter: ZERO_ADDRESS,
+        tokens: [flashToken.address, targetToken.address, flashToken.address],
+        fees: [DEFAULT_V2_FEE_BPS, DEFAULT_V2_FEE_BPS],
+        price,
+        amountOut: finalAmount
+      };
     } catch (error) {
       return null;
     }
   }
 
-  private async getUniswapV3Quote(tokenIn: TokenConfig, tokenOut: TokenConfig, amountIn: BigNumber): Promise<number | null> {
-    const feeTiers = [500, 3000, 10000];
+  private sampleAmount(decimals: number): BigNumber {
+    // use 25% of max position size for probing to keep calls cheap
+    const base = Math.max(this.maxPositionSize * 0.25, 0.01);
+    return ethers.utils.parseUnits(base.toFixed(decimals > 6 ? 6 : decimals), decimals);
+  }
+
+  private async getUniswapV3Quote(
+    tokenIn: TokenConfig,
+    tokenOut: TokenConfig,
+    amountIn: BigNumber,
+    preferredFee?: number
+  ): Promise<{ amountOut: BigNumber; fee: number } | null> {
+    const feeTiers = preferredFee ? [preferredFee] : [500, 1000, 3000, 10000];
 
     const quoter = new ethers.Contract(
       UNISWAP_V3_QUOTER,
@@ -186,45 +225,34 @@ export class OpportunityDetector extends EventEmitter {
       this.provider
     );
 
-    const results = await Promise.all(
-      feeTiers.map(async (fee) => {
-        try {
-          const amountOut: BigNumber = await quoter.callStatic.quoteExactInputSingle(
-            tokenIn.address,
-            tokenOut.address,
-            fee,
-            amountIn,
-            0
-          );
-          return amountOut;
-        } catch (error) {
-          return null;
+    let best: { amountOut: BigNumber; fee: number } | null = null;
+    for (const fee of feeTiers) {
+      try {
+        const amountOut: BigNumber = await quoter.callStatic.quoteExactInputSingle(
+          tokenIn.address,
+          tokenOut.address,
+          fee,
+          amountIn,
+          0
+        );
+
+        if (!best || amountOut.gt(best.amountOut)) {
+          best = { amountOut, fee };
         }
-      })
-    );
-
-    const successful = results.filter((value): value is BigNumber => value !== null);
-
-    if (successful.length === 0) {
-      return null;
+      } catch {
+        // ignore failures for a given fee tier
+      }
     }
 
-    const best = successful.reduce((max, current) => (current.gt(max) ? current : max), successful[0]);
-    return parseFloat(ethers.utils.formatUnits(best, tokenOut.decimals));
+    return best;
   }
 
-  private shouldEmit(opportunity: ArbitrageOpportunity): boolean {
-    const key = [
-      opportunity.tokenIn.address.toLowerCase(),
-      opportunity.tokenOut.address.toLowerCase(),
-      opportunity.buyDex.toLowerCase(),
-      opportunity.sellDex.toLowerCase()
-    ].join(":");
-
+  private shouldEmit(candidate: ArbitrageCandidate): boolean {
+    const key = candidate.id;
     const now = Date.now();
     const last = this.lastEmitted.get(key) || 0;
 
-    if (now - last < this.minReemitIntervalMs) {
+    if (now - last < MIN_REEMIT_INTERVAL_MS) {
       return false;
     }
 

@@ -1,0 +1,162 @@
+COMPARE_ADAPTERS
+RPC: https://polygon-mainnet.g.alchemy.com/v2/EoIJsX4Trx87tPHifPOzO5JZX4usqdDM
+
+--- ai-mev-hunter.json ---
+Tokens: [
+  '0x0d500B1d8E8eF31E21C99d1Db9A6444d3ADf1270',
+  '0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174',
+  '0x7ceB23fD6bC0adD59E62ac25578270cFf1b9f619',
+  '0x8f3Cf7ad23Cd3CaDbD9735AFf958023239c6A063'
+]
+Routers: [
+  '0xa5E0829CaCEd8fFDD4De3c43696c57F7D7A678ff',
+  '0xE592427A0AEce92De3Edee1F18E0157C05861564',
+  '0x1b02dA8Cb0d097eB8D57A175b88c7D8b47997506'
+]
+No API key. Please provide a secretKey. It is required to access thirdweb's services. You can create a key at https://thirdweb.com/create-api-key
+
+Pair: 0x0d500B1d8E8eF31E21C99d1Db9A6444d3ADf1270 -> 0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174 via 0xa5E0829CaCEd8fFDD4De3c43696c57F7D7A678ff
+DirectRPC time(ms): 455 result: [ '1000000000000000000', '196587' ] 
+Thirdweb time(ms): 1197 result: [ '1000000000000000000', '196587' ] 
+
+Pair: 0x0d500B1d8E8eF31E21C99d1Db9A6444d3ADf1270 -> 0x7ceB23fD6bC0adD59E62ac25578270cFf1b9f619 via 0xa5E0829CaCEd8fFDD4De3c43696c57F7D7A678ff
+DirectRPC time(ms): 207 result: [ '1000000000000000000', '48955341310885' ] 
+Thirdweb time(ms): 562 result: [ '1000000000000000000', '48955341310885' ] 
+
+Pair: 0x0d500B1d8E8eF31E21C99d1Db9A6444d3ADf1270 -> 0x8f3Cf7ad23Cd3CaDbD9735AFf958023239c6A063 via 0xa5E0829CaCEd8fFDD4De3c43696c57F7D7A678ff
+DirectRPC time(ms): 163 result: [ '1000000000000000000', '197063844074009183' ] 
+Thirdweb time(ms): 595 result: [ '1000000000000000000', '197063844074009183' ] 
+
+Pair: 0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174 -> 0x0d500B1d8E8eF31E21C99d1Db9A6444d3ADf1270 via 0xa5E0829CaCEd8fFDD4De3c43696c57F7D7A678ff
+DirectRPC time(ms): 165 result: [ '1000000000000000000', '2042964587045173770260007' ] 
+Thirdweb time(ms): 562 result: [ '1000000000000000000', '2042964587045173770260007' ] 
+
+Pair: 0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174 -> 0x7ceB23fD6bC0adD59E62ac25578270cFf1b9f619 via 0xa5E0829CaCEd8fFDD4De3c43696c57F7D7A678ff
+DirectRPC time(ms): 153 result: [ '1000000000000000000', '348420831393131331209' ] 
+Thirdweb time(ms): 482 result: [ '1000000000000000000', '348420831393131331209' ] 
+
+Pair: 0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174 -> 0x8f3Cf7ad23Cd3CaDbD9735AFf958023239c6A063 via 0xa5E0829CaCEd8fFDD4De3c43696c57F7D7A678ff
+DirectRPC time(ms): 175 result: [ '1000000000000000000', '148499154345623370378933' ] 
+Thirdweb time(ms): 522 result: [ '1000000000000000000', '148499154345623370378933' ] 
+
+Pair: 0x7ceB23fD6bC0adD59E62ac25578270cFf1b9f619 -> 0x0d500B1d8E8eF31E21C99d1Db9A6444d3ADf1270 via 0xa5E0829CaCEd8fFDD4De3c43696c57F7D7A678ff
+DirectRPC time(ms): 168 result: [ '1000000000000000000', '20125591505761795189304' ] 
+Thirdweb time(ms): 459 result: [ '1000000000000000000', '20125591505761795189304' ] 
+
+Pair: 0x7ceB23fD6bC0adD59E62ac25578270cFf1b9f619 -> 0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174 via 0xa5E0829CaCEd8fFDD4De3c43696c57F7D7A678ff
+DirectRPC time(ms): 151 result: [ '1000000000000000000', '4003314572' ] 
+Thirdweb time(ms): 512 result: [ '1000000000000000000', '4003314572' ] 
+
+Pair: 0x7ceB23fD6bC0adD59E62ac25578270cFf1b9f619 -> 0x8f3Cf7ad23Cd3CaDbD9735AFf958023239c6A063 via 0xa5E0829CaCEd8fFDD4De3c43696c57F7D7A678ff
+DirectRPC time(ms): 201 result: [ '1000000000000000000', '3704289995003241527807' ] 
+Thirdweb time(ms): 457 result: [ '1000000000000000000', '3704289995003241527807' ] 
+
+Pair: 0x8f3Cf7ad23Cd3CaDbD9735AFf958023239c6A063 -> 0x0d500B1d8E8eF31E21C99d1Db9A6444d3ADf1270 via 0xa5E0829CaCEd8fFDD4De3c43696c57F7D7A678ff
+DirectRPC time(ms): 169 result: [ '1000000000000000000', '5043349802890444970' ] 
+Thirdweb time(ms): 472 result: [ '1000000000000000000', '5043349802890444970' ] 
+
+Pair: 0x8f3Cf7ad23Cd3CaDbD9735AFf958023239c6A063 -> 0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174 via 0xa5E0829CaCEd8fFDD4De3c43696c57F7D7A678ff
+DirectRPC time(ms): 136 result: [ '1000000000000000000', '994393' ] 
+Thirdweb time(ms): 613 result: [ '1000000000000000000', '994393' ] 
+
+Pair: 0x8f3Cf7ad23Cd3CaDbD9735AFf958023239c6A063 -> 0x7ceB23fD6bC0adD59E62ac25578270cFf1b9f619 via 0xa5E0829CaCEd8fFDD4De3c43696c57F7D7A678ff
+DirectRPC time(ms): 140 result: [ '1000000000000000000', '248103801304864' ] 
+Thirdweb time(ms): 458 result: [ '1000000000000000000', '248103801304864' ] 
+
+Pair: 0x0d500B1d8E8eF31E21C99d1Db9A6444d3ADf1270 -> 0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174 via 0xE592427A0AEce92De3Edee1F18E0157C05861564
+DirectRPC time(ms): 197 result: ERR call revert exception [ See: https://links.ethers.org/v5-errors-CALL_EXCEPTION ] (method="getAmountsOut(uint256,address[])", data="0x", errorArgs=null, errorName=null, errorSignature=null, reason=null, code=CALL_EXCEPTION, version=abi/5.8.0)
+Thirdweb time(ms): 926 result: ERR call revert exception [ See: https://links.ethers.org/v5-errors-CALL_EXCEPTION ] (method="getAmountsOut(uint256,address[])", data="0x", errorArgs=null, errorName=null, errorSignature=null, reason=null, code=CALL_EXCEPTION, version=abi/5.8.0)
+
+Pair: 0x0d500B1d8E8eF31E21C99d1Db9A6444d3ADf1270 -> 0x7ceB23fD6bC0adD59E62ac25578270cFf1b9f619 via 0xE592427A0AEce92De3Edee1F18E0157C05861564
+DirectRPC time(ms): 216 result: ERR call revert exception [ See: https://links.ethers.org/v5-errors-CALL_EXCEPTION ] (method="getAmountsOut(uint256,address[])", data="0x", errorArgs=null, errorName=null, errorSignature=null, reason=null, code=CALL_EXCEPTION, version=abi/5.8.0)
+Thirdweb time(ms): 481 result: ERR call revert exception [ See: https://links.ethers.org/v5-errors-CALL_EXCEPTION ] (method="getAmountsOut(uint256,address[])", data="0x", errorArgs=null, errorName=null, errorSignature=null, reason=null, code=CALL_EXCEPTION, version=abi/5.8.0)
+
+Pair: 0x0d500B1d8E8eF31E21C99d1Db9A6444d3ADf1270 -> 0x8f3Cf7ad23Cd3CaDbD9735AFf958023239c6A063 via 0xE592427A0AEce92De3Edee1F18E0157C05861564
+DirectRPC time(ms): 165 result: ERR call revert exception [ See: https://links.ethers.org/v5-errors-CALL_EXCEPTION ] (method="getAmountsOut(uint256,address[])", data="0x", errorArgs=null, errorName=null, errorSignature=null, reason=null, code=CALL_EXCEPTION, version=abi/5.8.0)
+Thirdweb time(ms): 513 result: ERR call revert exception [ See: https://links.ethers.org/v5-errors-CALL_EXCEPTION ] (method="getAmountsOut(uint256,address[])", data="0x", errorArgs=null, errorName=null, errorSignature=null, reason=null, code=CALL_EXCEPTION, version=abi/5.8.0)
+
+Pair: 0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174 -> 0x0d500B1d8E8eF31E21C99d1Db9A6444d3ADf1270 via 0xE592427A0AEce92De3Edee1F18E0157C05861564
+DirectRPC time(ms): 134 result: ERR call revert exception [ See: https://links.ethers.org/v5-errors-CALL_EXCEPTION ] (method="getAmountsOut(uint256,address[])", data="0x", errorArgs=null, errorName=null, errorSignature=null, reason=null, code=CALL_EXCEPTION, version=abi/5.8.0)
+Thirdweb time(ms): 464 result: ERR call revert exception [ See: https://links.ethers.org/v5-errors-CALL_EXCEPTION ] (method="getAmountsOut(uint256,address[])", data="0x", errorArgs=null, errorName=null, errorSignature=null, reason=null, code=CALL_EXCEPTION, version=abi/5.8.0)
+
+Pair: 0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174 -> 0x7ceB23fD6bC0adD59E62ac25578270cFf1b9f619 via 0xE592427A0AEce92De3Edee1F18E0157C05861564
+DirectRPC time(ms): 155 result: ERR call revert exception [ See: https://links.ethers.org/v5-errors-CALL_EXCEPTION ] (method="getAmountsOut(uint256,address[])", data="0x", errorArgs=null, errorName=null, errorSignature=null, reason=null, code=CALL_EXCEPTION, version=abi/5.8.0)
+Thirdweb time(ms): 404 result: ERR call revert exception [ See: https://links.ethers.org/v5-errors-CALL_EXCEPTION ] (method="getAmountsOut(uint256,address[])", data="0x", errorArgs=null, errorName=null, errorSignature=null, reason=null, code=CALL_EXCEPTION, version=abi/5.8.0)
+
+Pair: 0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174 -> 0x8f3Cf7ad23Cd3CaDbD9735AFf958023239c6A063 via 0xE592427A0AEce92De3Edee1F18E0157C05861564
+DirectRPC time(ms): 151 result: ERR call revert exception [ See: https://links.ethers.org/v5-errors-CALL_EXCEPTION ] (method="getAmountsOut(uint256,address[])", data="0x", errorArgs=null, errorName=null, errorSignature=null, reason=null, code=CALL_EXCEPTION, version=abi/5.8.0)
+Thirdweb time(ms): 474 result: ERR call revert exception [ See: https://links.ethers.org/v5-errors-CALL_EXCEPTION ] (method="getAmountsOut(uint256,address[])", data="0x", errorArgs=null, errorName=null, errorSignature=null, reason=null, code=CALL_EXCEPTION, version=abi/5.8.0)
+
+Pair: 0x7ceB23fD6bC0adD59E62ac25578270cFf1b9f619 -> 0x0d500B1d8E8eF31E21C99d1Db9A6444d3ADf1270 via 0xE592427A0AEce92De3Edee1F18E0157C05861564
+DirectRPC time(ms): 154 result: ERR call revert exception [ See: https://links.ethers.org/v5-errors-CALL_EXCEPTION ] (method="getAmountsOut(uint256,address[])", data="0x", errorArgs=null, errorName=null, errorSignature=null, reason=null, code=CALL_EXCEPTION, version=abi/5.8.0)
+Thirdweb time(ms): 515 result: ERR call revert exception [ See: https://links.ethers.org/v5-errors-CALL_EXCEPTION ] (method="getAmountsOut(uint256,address[])", data="0x", errorArgs=null, errorName=null, errorSignature=null, reason=null, code=CALL_EXCEPTION, version=abi/5.8.0)
+
+Pair: 0x7ceB23fD6bC0adD59E62ac25578270cFf1b9f619 -> 0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174 via 0xE592427A0AEce92De3Edee1F18E0157C05861564
+DirectRPC time(ms): 175 result: ERR call revert exception [ See: https://links.ethers.org/v5-errors-CALL_EXCEPTION ] (method="getAmountsOut(uint256,address[])", data="0x", errorArgs=null, errorName=null, errorSignature=null, reason=null, code=CALL_EXCEPTION, version=abi/5.8.0)
+Thirdweb time(ms): 590 result: ERR call revert exception [ See: https://links.ethers.org/v5-errors-CALL_EXCEPTION ] (method="getAmountsOut(uint256,address[])", data="0x", errorArgs=null, errorName=null, errorSignature=null, reason=null, code=CALL_EXCEPTION, version=abi/5.8.0)
+
+Pair: 0x7ceB23fD6bC0adD59E62ac25578270cFf1b9f619 -> 0x8f3Cf7ad23Cd3CaDbD9735AFf958023239c6A063 via 0xE592427A0AEce92De3Edee1F18E0157C05861564
+DirectRPC time(ms): 139 result: ERR call revert exception [ See: https://links.ethers.org/v5-errors-CALL_EXCEPTION ] (method="getAmountsOut(uint256,address[])", data="0x", errorArgs=null, errorName=null, errorSignature=null, reason=null, code=CALL_EXCEPTION, version=abi/5.8.0)
+Thirdweb time(ms): 488 result: ERR call revert exception [ See: https://links.ethers.org/v5-errors-CALL_EXCEPTION ] (method="getAmountsOut(uint256,address[])", data="0x", errorArgs=null, errorName=null, errorSignature=null, reason=null, code=CALL_EXCEPTION, version=abi/5.8.0)
+
+Pair: 0x8f3Cf7ad23Cd3CaDbD9735AFf958023239c6A063 -> 0x0d500B1d8E8eF31E21C99d1Db9A6444d3ADf1270 via 0xE592427A0AEce92De3Edee1F18E0157C05861564
+DirectRPC time(ms): 213 result: ERR call revert exception [ See: https://links.ethers.org/v5-errors-CALL_EXCEPTION ] (method="getAmountsOut(uint256,address[])", data="0x", errorArgs=null, errorName=null, errorSignature=null, reason=null, code=CALL_EXCEPTION, version=abi/5.8.0)
+Thirdweb time(ms): 412 result: ERR call revert exception [ See: https://links.ethers.org/v5-errors-CALL_EXCEPTION ] (method="getAmountsOut(uint256,address[])", data="0x", errorArgs=null, errorName=null, errorSignature=null, reason=null, code=CALL_EXCEPTION, version=abi/5.8.0)
+
+Pair: 0x8f3Cf7ad23Cd3CaDbD9735AFf958023239c6A063 -> 0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174 via 0xE592427A0AEce92De3Edee1F18E0157C05861564
+DirectRPC time(ms): 141 result: ERR call revert exception [ See: https://links.ethers.org/v5-errors-CALL_EXCEPTION ] (method="getAmountsOut(uint256,address[])", data="0x", errorArgs=null, errorName=null, errorSignature=null, reason=null, code=CALL_EXCEPTION, version=abi/5.8.0)
+Thirdweb time(ms): 476 result: ERR call revert exception [ See: https://links.ethers.org/v5-errors-CALL_EXCEPTION ] (method="getAmountsOut(uint256,address[])", data="0x", errorArgs=null, errorName=null, errorSignature=null, reason=null, code=CALL_EXCEPTION, version=abi/5.8.0)
+
+Pair: 0x8f3Cf7ad23Cd3CaDbD9735AFf958023239c6A063 -> 0x7ceB23fD6bC0adD59E62ac25578270cFf1b9f619 via 0xE592427A0AEce92De3Edee1F18E0157C05861564
+DirectRPC time(ms): 147 result: ERR call revert exception [ See: https://links.ethers.org/v5-errors-CALL_EXCEPTION ] (method="getAmountsOut(uint256,address[])", data="0x", errorArgs=null, errorName=null, errorSignature=null, reason=null, code=CALL_EXCEPTION, version=abi/5.8.0)
+Thirdweb time(ms): 459 result: ERR call revert exception [ See: https://links.ethers.org/v5-errors-CALL_EXCEPTION ] (method="getAmountsOut(uint256,address[])", data="0x", errorArgs=null, errorName=null, errorSignature=null, reason=null, code=CALL_EXCEPTION, version=abi/5.8.0)
+
+Pair: 0x0d500B1d8E8eF31E21C99d1Db9A6444d3ADf1270 -> 0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174 via 0x1b02dA8Cb0d097eB8D57A175b88c7D8b47997506
+DirectRPC time(ms): 132 result: [ '1000000000000000000', '196713' ] 
+Thirdweb time(ms): 652 result: [ '1000000000000000000', '196713' ] 
+
+Pair: 0x0d500B1d8E8eF31E21C99d1Db9A6444d3ADf1270 -> 0x7ceB23fD6bC0adD59E62ac25578270cFf1b9f619 via 0x1b02dA8Cb0d097eB8D57A175b88c7D8b47997506
+DirectRPC time(ms): 131 result: [ '1000000000000000000', '48933095565234' ] 
+Thirdweb time(ms): 421 result: [ '1000000000000000000', '48933095565234' ] 
+
+Pair: 0x0d500B1d8E8eF31E21C99d1Db9A6444d3ADf1270 -> 0x8f3Cf7ad23Cd3CaDbD9735AFf958023239c6A063 via 0x1b02dA8Cb0d097eB8D57A175b88c7D8b47997506
+DirectRPC time(ms): 164 result: [ '1000000000000000000', '196529543834695460' ] 
+Thirdweb time(ms): 448 result: [ '1000000000000000000', '196529543834695460' ] 
+
+Pair: 0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174 -> 0x0d500B1d8E8eF31E21C99d1Db9A6444d3ADf1270 via 0x1b02dA8Cb0d097eB8D57A175b88c7D8b47997506
+DirectRPC time(ms): 149 result: [ '1000000000000000000', '307884109837244557153661' ] 
+Thirdweb time(ms): 467 result: [ '1000000000000000000', '307884109837244557153661' ] 
+
+Pair: 0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174 -> 0x7ceB23fD6bC0adD59E62ac25578270cFf1b9f619 via 0x1b02dA8Cb0d097eB8D57A175b88c7D8b47997506
+DirectRPC time(ms): 230 result: [ '1000000000000000000', '67190071768454749972' ] 
+Thirdweb time(ms): 520 result: [ '1000000000000000000', '67190071768454749972' ] 
+
+Pair: 0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174 -> 0x8f3Cf7ad23Cd3CaDbD9735AFf958023239c6A063 via 0x1b02dA8Cb0d097eB8D57A175b88c7D8b47997506
+DirectRPC time(ms): 170 result: [ '1000000000000000000', '98701757187859128093344' ] 
+Thirdweb time(ms): 503 result: [ '1000000000000000000', '98701757187859128093344' ] 
+
+Pair: 0x7ceB23fD6bC0adD59E62ac25578270cFf1b9f619 -> 0x0d500B1d8E8eF31E21C99d1Db9A6444d3ADf1270 via 0x1b02dA8Cb0d097eB8D57A175b88c7D8b47997506
+DirectRPC time(ms): 149 result: [ '1000000000000000000', '20008204020239546812430' ] 
+Thirdweb time(ms): 420 result: [ '1000000000000000000', '20008204020239546812430' ] 
+
+Pair: 0x7ceB23fD6bC0adD59E62ac25578270cFf1b9f619 -> 0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174 via 0x1b02dA8Cb0d097eB8D57A175b88c7D8b47997506
+DirectRPC time(ms): 167 result: [ '1000000000000000000', '3951522536' ] 
+Thirdweb time(ms): 439 result: [ '1000000000000000000', '3951522536' ] 
+
+Pair: 0x7ceB23fD6bC0adD59E62ac25578270cFf1b9f619 -> 0x8f3Cf7ad23Cd3CaDbD9735AFf958023239c6A063 via 0x1b02dA8Cb0d097eB8D57A175b88c7D8b47997506
+DirectRPC time(ms): 117 result: [ '1000000000000000000', '3734349920228692242372' ] 
+Thirdweb time(ms): 410 result: [ '1000000000000000000', '3734349920228692242372' ] 
+
+Pair: 0x8f3Cf7ad23Cd3CaDbD9735AFf958023239c6A063 -> 0x0d500B1d8E8eF31E21C99d1Db9A6444d3ADf1270 via 0x1b02dA8Cb0d097eB8D57A175b88c7D8b47997506
+DirectRPC time(ms): 142 result: [ '1000000000000000000', '5053183484007313520' ] 
+Thirdweb time(ms): 423 result: [ '1000000000000000000', '5053183484007313520' ] 
+
+Pair: 0x8f3Cf7ad23Cd3CaDbD9735AFf958023239c6A063 -> 0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174 via 0x1b02dA8Cb0d097eB8D57A175b88c7D8b47997506
+DirectRPC time(ms): 134 result: [ '1000000000000000000', '996481' ] 
+Thirdweb time(ms): 488 result: [ '1000000000000000000', '996481' ] 
+
+Pair: 0x8f3Cf7ad23Cd3CaDbD9735AFf958023239c6A063 -> 0x7ceB23fD6bC0adD59E62ac25578270cFf1b9f619 via 0x1b02dA8Cb0d097eB8D57A175b88c7D8b47997506
+DirectRPC time(ms): 142 result: [ '1000000000000000000', '248045957303568' ] 
+Thirdweb time(ms): 480 result: [ '1000000000000000000', '248045957303568' ] 
+
+DONE

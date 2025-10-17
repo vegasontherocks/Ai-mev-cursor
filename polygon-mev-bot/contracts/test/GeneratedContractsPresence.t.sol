@@ -1,14 +1,14 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.20;
 
-import { Test } from "forge-std/Test.sol";
+import {Test} from "forge-std/Test.sol";
 
 // Import every generated artifact so compilation fails when any file is missing.
-import { MEVExecutor } from "../src/generated/MEVExecutor.sol";
-import { DEXAdapter } from "../src/generated/DEXAdapter.sol";
-import { AaveAdapter } from "../src/generated/AaveAdapter.sol";
-import { JITAdapter } from "../src/generated/JITAdapter.sol";
-import { OracleLib } from "../src/generated/OracleLib.sol";
+import {MEVExecutor} from "../src/generated/MEVExecutor.sol";
+import {DEXAdapter} from "../src/generated/DEXAdapter.sol";
+import {AaveAdapter} from "../src/generated/AaveAdapter.sol";
+import {JITAdapter} from "../src/generated/JITAdapter.sol";
+import {OracleLib} from "../src/generated/OracleLib.sol";
 
 contract GeneratedContractsPresenceTest is Test {
     function testGeneratedContractsCompile() external pure {
