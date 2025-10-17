@@ -32,6 +32,14 @@ Thumbs.db
 # Models
 eliza-agent/models/*.h5
 eliza-agent/models/*.pb
+eliza-agent-ai/models/*.onnx
+eliza-agent-ai/models/*.h5
+eliza-agent-ai/models/*.pb
+
+# Database
+eliza-agent-ai/data/*.db
+eliza-agent-ai/data/*.db-shm
+eliza-agent-ai/data/*.db-wal
 
 # Secrets
 *.key
