@@ -62,7 +62,23 @@ The agent now supports both the local Polygon MCP server and Thirdweb’s hosted
 
 Refer to `docs/QUICK_START.md` for the command sequence and troubleshooting.
 
-### Quick Setup
+## Quick Setup
+
+**🚀 Fastest way to get started:**
+
+```bash
+# Run the automated setup script
+./quick-setup.sh
+```
+
+This will:
+- Install all npm dependencies
+- Setup the RL model (placeholder for development)
+- Verify the system is ready
+
+**For detailed setup instructions**, see [SETUP_GUIDE.md](./SETUP_GUIDE.md).
+
+**Manual setup:**
 
 1. Copy the environment template and populate your secrets (never commit real keys):
 
@@ -71,7 +87,25 @@ Refer to `docs/QUICK_START.md` for the command sequence and troubleshooting.
    # edit .env then follow quick commands below
    ```
 
-2. Install dependencies in `eliza-agent-ai` and other JS workspaces before running the agent.
+2. Install dependencies:
+
+   ```bash
+   cd eliza-agent-ai && npm install
+   cd ../scripts && npm install
+   ```
+
+3. Setup RL model:
+
+   ```bash
+   cd eliza-agent-ai
+   npm run setup:model
+   ```
+
+4. Verify setup:
+
+   ```bash
+   npm run verify:setup
+   ```
 
 
 ### Structured Execution Logs
@@ -103,8 +137,14 @@ npm run smoke:mcp                # sample MCP call (see package.json)
 
 ### Need More Detail?
 
-- `docs/QUICK_START.md` – step-by-step setup, regeneration, and validation guidance.
-- `docs/TROUBLESHOOTING.md` – known failure modes and investigation tips.
-- `.github/copilot-instructions.md` – verification matrix for tracking project readiness.
+- **[SETUP_GUIDE.md](./SETUP_GUIDE.md)** – **NEW!** Comprehensive setup guide with verification checklist
+- `docs/QUICK_START.md` – step-by-step setup, regeneration, and validation guidance
+- `docs/TROUBLESHOOTING.md` – known failure modes and investigation tips
+- `.github/copilot-instructions.md` – verification matrix for tracking project readiness
+- **[WHAT_TO_RUN.txt](./WHAT_TO_RUN.txt)** – Quick reference for accurate workflow
+
+**New verification scripts:**
+- `npm run setup:model` – Download or create RL model
+- `npm run verify:setup` – Check all components from verification matrix
 
 Contributions should leave the repository lint-clean, keep the Foundry suite green, and document any workflow changes so the team can reproduce results.

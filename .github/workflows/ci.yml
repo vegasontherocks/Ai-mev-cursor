@@ -36,6 +36,16 @@ jobs:
         run: |
           cd polygon-mev-bot/eliza-agent-ai
           npm ci
+          cd ../scripts
+          npm ci
+      - name: Setup RL model
+        run: |
+          cd polygon-mev-bot/eliza-agent-ai
+          npm run setup:model
+      - name: Verify setup
+        run: |
+          cd polygon-mev-bot/eliza-agent-ai
+          npm run verify:setup
       - name: Type check / build
         run: |
           cd polygon-mev-bot/eliza-agent-ai

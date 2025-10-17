@@ -21,7 +21,8 @@
     "thirdweb:wallet": "node --loader ts-node/esm src/scripts/thirdwebServerWalletDemo.ts",
     "canary:run": "node dist/utils/canaryRun.js",
     "setup:model": "node --loader ts-node/esm scripts/downloadRLModel.ts",
-    "verify:setup": "node --loader ts-node/esm scripts/verifySetup.ts"
+    "verify:setup": "node --loader ts-node/esm scripts/verifySetup.ts",
+    "postinstall:manual": "node scripts/postinstall.mjs"
   },
   "dependencies": {
     "@ai16z/eliza": "^0.1.4",
