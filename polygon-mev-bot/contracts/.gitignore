@@ -1,0 +1,15 @@
+# Compiler artifacts
+cache/
+out/
+
+# Deployment logs
+broadcast/
+
+# Local dependencies
+lib/
+
+# Docs
+docs/
+
+# Dotenv file
+.env

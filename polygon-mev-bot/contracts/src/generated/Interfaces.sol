@@ -18,9 +18,12 @@ interface IVault {
         uint256[] memory amounts,
         bytes memory userData
     ) external;
-    
-    enum SwapKind { GIVEN_IN, GIVEN_OUT }
-    
+
+    enum SwapKind {
+        GIVEN_IN,
+        GIVEN_OUT
+    }
+
     struct SingleSwap {
         bytes32 poolId;
         SwapKind kind;
@@ -29,20 +32,17 @@ interface IVault {
         uint256 amount;
         bytes userData;
     }
-    
+
     struct FundManagement {
         address sender;
         bool fromInternalBalance;
         address payable recipient;
         bool toInternalBalance;
     }
-    
-    function swap(
-        SingleSwap memory singleSwap,
-        FundManagement memory funds,
-        uint256 limit,
-        uint256 deadline
-    ) external returns (uint256);
+
+    function swap(SingleSwap memory singleSwap, FundManagement memory funds, uint256 limit, uint256 deadline)
+        external
+        returns (uint256);
 }
 
 interface IFlashLoanRecipient {
@@ -61,6 +61,7 @@ interface IERC20 {
     function allowance(address owner, address spender) external view returns (uint256);
     function approve(address spender, uint256 amount) external returns (bool);
     function transferFrom(address sender, address recipient, uint256 amount) external returns (bool);
+
     event Transfer(address indexed from, address indexed to, uint256 value);
     event Approval(address indexed owner, address indexed spender, uint256 value);
 }
@@ -71,29 +72,32 @@ interface IERC20 {
 
 interface IUniswapV2Router02 {
     function factory() external pure returns (address);
-    function WETH() external pure returns (address);
-    
+
     function swapExactTokensForTokens(
-        uint amountIn,
-        uint amountOutMin,
+        uint256 amountIn,
+        uint256 amountOutMin,
         address[] calldata path,
         address to,
-        uint deadline
-    ) external returns (uint[] memory amounts);
-    
+        uint256 deadline
+    ) external returns (uint256[] memory amounts);
+
     function swapTokensForExactTokens(
-        uint amountOut,
-        uint amountInMax,
+        uint256 amountOut,
+        uint256 amountInMax,
         address[] calldata path,
         address to,
-        uint deadline
-    ) external returns (uint[] memory amounts);
-    
-    function getAmountsOut(uint amountIn, address[] calldata path)
-        external view returns (uint[] memory amounts);
-    
-    function getAmountsIn(uint amountOut, address[] calldata path)
-        external view returns (uint[] memory amounts);
+        uint256 deadline
+    ) external returns (uint256[] memory amounts);
+
+    function getAmountsOut(uint256 amountIn, address[] calldata path)
+        external
+        view
+        returns (uint256[] memory amounts);
+
+    function getAmountsIn(uint256 amountOut, address[] calldata path)
+        external
+        view
+        returns (uint256[] memory amounts);
 }
 
 interface IUniswapV2Factory {
@@ -104,8 +108,8 @@ interface IUniswapV2Pair {
     function token0() external view returns (address);
     function token1() external view returns (address);
     function getReserves() external view returns (uint112 reserve0, uint112 reserve1, uint32 blockTimestampLast);
-    function price0CumulativeLast() external view returns (uint);
-    function price1CumulativeLast() external view returns (uint);
+    function price0CumulativeLast() external view returns (uint256);
+    function price1CumulativeLast() external view returns (uint256);
 }
 
 // ============================================================================
@@ -123,10 +127,9 @@ interface ISwapRouter {
         uint256 amountOutMinimum;
         uint160 sqrtPriceLimitX96;
     }
-    
-    function exactInputSingle(ExactInputSingleParams calldata params)
-        external payable returns (uint256 amountOut);
-    
+
+    function exactInputSingle(ExactInputSingleParams calldata params) external payable returns (uint256 amountOut);
+
     struct ExactInputParams {
         bytes path;
         address recipient;
@@ -134,9 +137,8 @@ interface ISwapRouter {
         uint256 amountIn;
         uint256 amountOutMinimum;
     }
-    
-    function exactInput(ExactInputParams calldata params)
-        external payable returns (uint256 amountOut);
+
+    function exactInput(ExactInputParams calldata params) external payable returns (uint256 amountOut);
 }
 
 interface IQuoter {
@@ -147,19 +149,24 @@ interface IQuoter {
         uint256 amountIn,
         uint160 sqrtPriceLimitX96
     ) external returns (uint256 amountOut);
+
+    function quoteExactInput(bytes memory path, uint256 amountIn) external returns (uint256 amountOut);
 }
 
 interface IUniswapV3Pool {
-    function slot0() external view returns (
-        uint160 sqrtPriceX96,
-        int24 tick,
-        uint16 observationIndex,
-        uint16 observationCardinality,
-        uint16 observationCardinalityNext,
-        uint8 feeProtocol,
-        bool unlocked
-    );
-    
+    function slot0()
+        external
+        view
+        returns (
+            uint160 sqrtPriceX96,
+            int24 tick,
+            uint16 observationIndex,
+            uint16 observationCardinality,
+            uint16 observationCardinalityNext,
+            uint8 feeProtocol,
+            bool unlocked
+        );
+
     function liquidity() external view returns (uint128);
     function fee() external view returns (uint24);
 }
@@ -178,26 +185,21 @@ interface INonfungiblePositionManager {
         address recipient;
         uint256 deadline;
     }
-    
-    function mint(MintParams calldata params) external payable returns (
-        uint256 tokenId,
-        uint128 liquidity,
-        uint256 amount0,
-        uint256 amount1
-    );
-    
+
+    function mint(MintParams calldata params)
+        external
+        payable
+        returns (uint256 tokenId, uint128 liquidity, uint256 amount0, uint256 amount1);
+
     struct CollectParams {
         uint256 tokenId;
         address recipient;
         uint128 amount0Max;
         uint128 amount1Max;
     }
-    
-    function collect(CollectParams calldata params) external payable returns (
-        uint256 amount0,
-        uint256 amount1
-    );
-    
+
+    function collect(CollectParams calldata params) external payable returns (uint256 amount0, uint256 amount1);
+
     struct DecreaseLiquidityParams {
         uint256 tokenId;
         uint128 liquidity;
@@ -205,11 +207,11 @@ interface INonfungiblePositionManager {
         uint256 amount1Min;
         uint256 deadline;
     }
-    
-    function decreaseLiquidity(DecreaseLiquidityParams calldata params) external payable returns (
-        uint256 amount0,
-        uint256 amount1
-    );
+
+    function decreaseLiquidity(DecreaseLiquidityParams calldata params)
+        external
+        payable
+        returns (uint256 amount0, uint256 amount1);
 }
 
 // ============================================================================
@@ -217,15 +219,18 @@ interface INonfungiblePositionManager {
 // ============================================================================
 
 interface IPool {
-    function getUserAccountData(address user) external view returns (
-        uint256 totalCollateralBase,
-        uint256 totalDebtBase,
-        uint256 availableBorrowsBase,
-        uint256 currentLiquidationThreshold,
-        uint256 ltv,
-        uint256 healthFactor
-    );
-    
+    function getUserAccountData(address user)
+        external
+        view
+        returns (
+            uint256 totalCollateralBase,
+            uint256 totalDebtBase,
+            uint256 availableBorrowsBase,
+            uint256 currentLiquidationThreshold,
+            uint256 ltv,
+            uint256 healthFactor
+        );
+
     function liquidationCall(
         address collateralAsset,
         address debtAsset,
@@ -236,17 +241,20 @@ interface IPool {
 }
 
 interface IPoolDataProvider {
-    function getUserReserveData(address asset, address user) external view returns (
-        uint256 currentATokenBalance,
-        uint256 currentStableDebt,
-        uint256 currentVariableDebt,
-        uint256 principalStableDebt,
-        uint256 scaledVariableDebt,
-        uint256 stableBorrowRate,
-        uint256 liquidityRate,
-        uint40 stableRateLastUpdated,
-        bool usageAsCollateralEnabled
-    );
+    function getUserReserveData(address asset, address user)
+        external
+        view
+        returns (
+            uint256 currentATokenBalance,
+            uint256 currentStableDebt,
+            uint256 currentVariableDebt,
+            uint256 principalStableDebt,
+            uint256 scaledVariableDebt,
+            uint256 stableBorrowRate,
+            uint256 liquidityRate,
+            uint40 stableRateLastUpdated,
+            bool usageAsCollateralEnabled
+        );
 }
 
 // ============================================================================
@@ -257,12 +265,9 @@ interface AggregatorV3Interface {
     function decimals() external view returns (uint8);
     function description() external view returns (string memory);
     function version() external view returns (uint256);
-    
-    function latestRoundData() external view returns (
-        uint80 roundId,
-        int256 answer,
-        uint256 startedAt,
-        uint256 updatedAt,
-        uint80 answeredInRound
-    );
+
+    function latestRoundData()
+        external
+        view
+        returns (uint80 roundId, int256 answer, uint256 startedAt, uint256 updatedAt, uint80 answeredInRound);
 }

@@ -7,297 +7,307 @@ import {
   ListToolsRequestSchema,
   Tool
 } from "@modelcontextprotocol/sdk/types.js";
-import { ethers } from "ethers";
+import {
+  Contract,
+  JsonRpcProvider,
+  WebSocketProvider,
+  formatEther,
+  formatUnits,
+  parseEther
+} from "ethers";
 import { LRUCache } from "lru-cache";
 
-/**
- * HIGH-PERFORMANCE MCP SERVER FOR POLYGON
- * 
- * Optimizations:
- * - LRU caching with 1-5s TTL
- * - WebSocket connection pooling
- * - Parallel RPC calls
- * - Request deduplication
- * - Response streaming
- * 
- * Target latency: <50ms for cached, <200ms for uncached
- */
+type AnyProvider = JsonRpcProvider | WebSocketProvider;
 
-// Cache configuration for speed
-const cache = new LRUCache({
+type DexPriceEntry = {
+  dex: string;
+  price: number | null;
+  timestamp: number;
+  error?: string;
+};
+
+type CachedResult<T> = T & { cached: boolean; latency: number };
+
+const ROUTER_ABI = [
+  "function getAmountsOut(uint256 amountIn, address[] path) view returns (uint256[] memory)"
+];
+
+function requireEnv(key: string): string {
+  const value = process.env[key];
+  if (!value) {
+    throw new Error(`Missing environment variable: ${key}`);
+  }
+  return value;
+}
+
+const cache = new LRUCache<string, CachedResult<any>>({
   max: 1000,
-  ttl: 5000, // 5 second TTL - fresh enough for MEV
+  ttl: 5000,
   updateAgeOnGet: true
 });
 
-// Connection pool for low latency
 const providers = {
-  primary: new ethers.providers.WebSocketProvider(
-    process.env.POLYGON_WSS_URL!
-  ),
-  backup: new ethers.providers.JsonRpcProvider(
-    process.env.POLYGON_RPC_URL!
-  )
+  primary: new WebSocketProvider(requireEnv("POLYGON_WSS_URL")),
+  backup: new JsonRpcProvider(requireEnv("POLYGON_RPC_URL"))
 };
 
-// In-flight request deduplication
 const inFlightRequests = new Map<string, Promise<any>>();
+const UNIT = parseEther("1");
 
-/**
- * Fast DEX price fetcher with caching
- */
-async function getDEXPrices(params: {
-  tokenA: string;
-  tokenB: string;
-  dexes: string[];
-}): Promise<any> {
+async function callWithFallback<T>(fn: (provider: AnyProvider) => Promise<T>): Promise<T> {
+  try {
+    return await fn(providers.primary);
+  } catch (primaryError) {
+    return fn(providers.backup);
+  }
+}
+
+function withCacheHit<T>(result: CachedResult<T>): CachedResult<T> {
+  return { ...result, cached: true };
+}
+
+async function getDEXPrices(params: { tokenA: string; tokenB: string; dexes: string[] }): Promise<CachedResult<{ prices: DexPriceEntry[] }>> {
   const cacheKey = `prices:${params.tokenA}:${params.tokenB}`;
-  
-  // Check cache first (instant response)
-  if (cache.has(cacheKey)) {
-    return cache.get(cacheKey);
+  const cached = cache.get(cacheKey);
+  if (cached) {
+    return withCacheHit(cached);
   }
-  
-  // Check if request already in flight (prevent duplicate RPC calls)
+
   if (inFlightRequests.has(cacheKey)) {
-    return inFlightRequests.get(cacheKey);
+    return inFlightRequests.get(cacheKey)!;
   }
-  
-  const startTime = Date.now();
-  
-  // Fetch prices in parallel for speed
-  const pricePromise = Promise.all(
-    params.dexes.map(async (dex) => {
+
+  const start = Date.now();
+  const quotePromise = Promise.all(
+    params.dexes.map(async (dex): Promise<DexPriceEntry> => {
       try {
-        const router = new ethers.Contract(
-          dex,
-          ["function getAmountsOut(uint256 amountIn, address[] path) view returns (uint256[])"],
-          providers.primary
-        );
-        
-        const amountIn = ethers.utils.parseEther("1");
-        const path = [params.tokenA, params.tokenB];
-        
-        // Race between primary and backup for reliability
-        const amounts = await Promise.race([
-          router.getAmountsOut(amountIn, path),
-          new Promise((_, reject) => 
-            setTimeout(() => reject(new Error("Timeout")), 500)
-          )
-        ]);
-        
+        const fetchQuote = async (provider: AnyProvider) => {
+          const router = new Contract(dex, ROUTER_ABI, provider);
+          return router.getAmountsOut(UNIT, [params.tokenA, params.tokenB]);
+        };
+
+        const amounts = await callWithFallback(fetchQuote);
         return {
           dex,
-          price: ethers.utils.formatEther(amounts[1]),
+          price: Number(formatEther(amounts[1])),
           timestamp: Date.now()
         };
-      } catch (error) {
-        return { dex, price: null, error: error.message };
+      } catch (error: any) {
+        return {
+          dex,
+          price: null,
+          timestamp: Date.now(),
+          error: error?.message ?? String(error)
+        };
       }
     })
   );
-  
-  inFlightRequests.set(cacheKey, pricePromise);
-  
+
+  inFlightRequests.set(cacheKey, quotePromise);
+
   try {
-    const prices = await pricePromise;
-    const latency = Date.now() - startTime;
-    
-    const result = {
+    const prices = await quotePromise;
+    const result: CachedResult<{ prices: DexPriceEntry[] }> = {
       prices,
-      latency,
+      latency: Date.now() - start,
       cached: false
     };
-    
-    // Cache result
     cache.set(cacheKey, result);
-    
     return result;
   } finally {
     inFlightRequests.delete(cacheKey);
   }
 }
 
-/**
- * Ultra-fast gas price oracle
- */
-async function getGasPrice(): Promise<any> {
-  const cacheKey = 'gas_price';
-  
-  if (cache.has(cacheKey)) {
-    return cache.get(cacheKey);
+async function getGasPrice(): Promise<CachedResult<{
+  baseFee: number;
+  maxPriorityFee: number;
+  maxFee: number;
+  gasStation: any;
+  error?: string;
+}>> {
+  const cacheKey = "gas_price";
+  const cached = cache.get(cacheKey);
+  if (cached) {
+    return withCacheHit(cached);
   }
-  
-  const startTime = Date.now();
-  
+
+  const start = Date.now();
+
   try {
-    // Parallel queries for speed
     const [feeData, gasStation] = await Promise.all([
       providers.primary.getFeeData(),
       fetch("https://gasstation.polygon.technology/v2")
-        .then(r => r.json())
+        .then((r) => r.json())
         .catch(() => null)
     ]);
-    
-    const result = {
-      baseFee: ethers.utils.formatUnits(feeData.lastBaseFeePerGas || 0, "gwei"),
-      maxPriorityFee: ethers.utils.formatUnits(feeData.maxPriorityFeePerGas || 0, "gwei"),
-      maxFee: ethers.utils.formatUnits(feeData.maxFeePerGas || 0, "gwei"),
-      gasStation: gasStation ? {
-        safeLow: gasStation.safeLow.maxFee,
-        standard: gasStation.standard.maxFee,
-        fast: gasStation.fast.maxFee,
-        fastest: gasStation.fastest.maxFee
-      } : null,
-      latency: Date.now() - startTime,
+
+    const baseFeePerGas = feeData.gasPrice ?? feeData.maxFeePerGas ?? undefined;
+
+    const result: CachedResult<{
+      baseFee: number;
+      maxPriorityFee: number;
+      maxFee: number;
+      gasStation: any;
+      error?: string;
+    }> = {
+      baseFee: baseFeePerGas ? Number(formatUnits(baseFeePerGas, "gwei")) : 0,
+      maxPriorityFee: feeData.maxPriorityFeePerGas ? Number(formatUnits(feeData.maxPriorityFeePerGas, "gwei")) : 0,
+      maxFee: feeData.maxFeePerGas ? Number(formatUnits(feeData.maxFeePerGas, "gwei")) : 0,
+      gasStation: gasStation
+        ? {
+            safeLow: gasStation.safeLow?.maxFee,
+            standard: gasStation.standard?.maxFee,
+            fast: gasStation.fast?.maxFee,
+            fastest: gasStation.fastest?.maxFee
+          }
+        : null,
+      latency: Date.now() - start,
       cached: false
     };
-    
-    // Cache for 2 seconds (gas changes frequently)
+
     cache.set(cacheKey, result, { ttl: 2000 });
-    
     return result;
-  } catch (error) {
-    return { error: error.message, latency: Date.now() - startTime };
+  } catch (error: any) {
+    const result: CachedResult<{
+      baseFee: number;
+      maxPriorityFee: number;
+      maxFee: number;
+      gasStation: any;
+      error?: string;
+    }> = {
+      baseFee: 0,
+      maxPriorityFee: 0,
+      maxFee: 0,
+      gasStation: null,
+      error: error?.message ?? String(error),
+      latency: Date.now() - start,
+      cached: false
+    };
+    cache.set(cacheKey, result, { ttl: 2000 });
+    return result;
   }
 }
 
-/**
- * Fast mempool transaction lookup
- */
-async function getPendingTransaction(txHash: string): Promise<any> {
+async function getPendingTransaction(txHash: string): Promise<CachedResult<{ tx: any; error?: string }>> {
   const cacheKey = `tx:${txHash}`;
-  
-  if (cache.has(cacheKey)) {
-    return cache.get(cacheKey);
+  const cached = cache.get(cacheKey);
+  if (cached) {
+    return withCacheHit(cached);
   }
-  
-  const startTime = Date.now();
-  
+
+  const start = Date.now();
+
   try {
-    const tx = await providers.primary.getTransaction(txHash);
-    
-    const result = {
-      tx: tx ? {
-        hash: tx.hash,
-        from: tx.from,
-        to: tx.to,
-        value: ethers.utils.formatEther(tx.value || 0),
-        gasPrice: ethers.utils.formatUnits(tx.gasPrice || 0, "gwei"),
-        data: tx.data.slice(0, 10), // Method signature only
-        nonce: tx.nonce
-      } : null,
-      latency: Date.now() - startTime,
+    const tx = await callWithFallback((provider) => provider.getTransaction(txHash));
+    const result: CachedResult<{ tx: any; error?: string }> = {
+      tx: tx
+        ? {
+            hash: tx.hash,
+            from: tx.from,
+            to: tx.to,
+            value: tx.value ? Number(formatEther(tx.value)) : 0,
+            gasPrice: tx.gasPrice ? Number(formatUnits(tx.gasPrice, "gwei")) : 0,
+            data: tx.data,
+            nonce: tx.nonce
+          }
+        : null,
+      latency: Date.now() - start,
       cached: false
     };
-    
-    // Short cache for pending txs
     cache.set(cacheKey, result, { ttl: 1000 });
-    
     return result;
-  } catch (error) {
-    return { error: error.message, latency: Date.now() - startTime };
-  }
-}
-
-/**
- * Fast block data with selective fields
- */
-async function getBlockData(blockNumber: number | 'latest'): Promise<any> {
-  const cacheKey = `block:${blockNumber}`;
-  
-  if (cache.has(cacheKey)) {
-    return cache.get(cacheKey);
-  }
-  
-  const startTime = Date.now();
-  
-  try {
-    const block = await providers.primary.getBlock(blockNumber);
-    
-    const result = {
-      number: block.number,
-      timestamp: block.timestamp,
-      gasUsed: block.gasUsed.toString(),
-      gasLimit: block.gasLimit.toString(),
-      baseFeePerGas: block.baseFeePerGas ? 
-        ethers.utils.formatUnits(block.baseFeePerGas, "gwei") : null,
-      transactions: block.transactions.length,
-      latency: Date.now() - startTime,
+  } catch (error: any) {
+    const result: CachedResult<{ tx: any; error?: string }> = {
+      tx: null,
+      error: error?.message ?? String(error),
+      latency: Date.now() - start,
       cached: false
     };
-    
-    // Cache blocks for 5 seconds
-    cache.set(cacheKey, result);
-    
+    cache.set(cacheKey, result, { ttl: 1000 });
     return result;
-  } catch (error) {
-    return { error: error.message, latency: Date.now() - startTime };
   }
 }
 
-/**
- * Batch price queries for maximum speed
- */
-async function batchGetPrices(queries: Array<{
-  tokenA: string;
-  tokenB: string;
-  dex: string;
-}>): Promise<any> {
-  const startTime = Date.now();
-  
-  // Execute all queries in parallel
+async function getBlockData(blockNumber: number | "latest"): Promise<CachedResult<any>> {
+  const cacheKey = `block:${blockNumber}`;
+  const cached = cache.get(cacheKey);
+  if (cached) {
+    return withCacheHit(cached);
+  }
+
+  const start = Date.now();
+
+  try {
+    const block = await callWithFallback((provider) => provider.getBlock(blockNumber));
+    const result: CachedResult<any> = {
+      number: block?.number ?? null,
+      timestamp: block?.timestamp ?? null,
+      gasUsed: block?.gasUsed?.toString() ?? null,
+      gasLimit: block?.gasLimit?.toString() ?? null,
+      baseFeePerGas: block?.baseFeePerGas ? Number(formatUnits(block.baseFeePerGas, "gwei")) : null,
+      transactions: block?.transactions?.length ?? 0,
+      latency: Date.now() - start,
+      cached: false
+    };
+    cache.set(cacheKey, result);
+    return result;
+  } catch (error: any) {
+    const result: CachedResult<any> = {
+      error: error?.message ?? String(error),
+      latency: Date.now() - start,
+      cached: false
+    };
+    cache.set(cacheKey, result);
+    return result;
+  }
+}
+
+async function batchGetPrices(queries: Array<{ tokenA: string; tokenB: string; dex: string }>): Promise<CachedResult<{ results: DexPriceEntry[]; count: number }>> {
+  const start = Date.now();
+
   const results = await Promise.all(
-    queries.map(async (q) => {
-      const cacheKey = `price:${q.tokenA}:${q.tokenB}:${q.dex}`;
-      
-      if (cache.has(cacheKey)) {
-        return { ...cache.get(cacheKey), query: q };
+    queries.map(async (query) => {
+      const cacheKey = `price:${query.tokenA}:${query.tokenB}:${query.dex}`;
+      const cached = cache.get(cacheKey);
+      if (cached) {
+        return { ...withCacheHit(cached), query };
       }
-      
+
       try {
-        const router = new ethers.Contract(
-          q.dex,
-          ["function getAmountsOut(uint256 amountIn, address[] path) view returns (uint256[])"],
-          providers.primary
-        );
-        
-        const amounts = await router.getAmountsOut(
-          ethers.utils.parseEther("1"),
-          [q.tokenA, q.tokenB]
-        );
-        
-        const price = ethers.utils.formatEther(amounts[1]);
-        cache.set(cacheKey, { price, timestamp: Date.now() });
-        
-        return { query: q, price, error: null };
-      } catch (error) {
-        return { query: q, price: null, error: error.message };
+        const fetchQuote = async (provider: AnyProvider) => {
+          const router = new Contract(query.dex, ROUTER_ABI, provider);
+          return router.getAmountsOut(UNIT, [query.tokenA, query.tokenB]);
+        };
+
+        const amounts = await callWithFallback(fetchQuote);
+        const entry: CachedResult<{ price: number; timestamp: number }> = {
+          price: Number(formatEther(amounts[1])),
+          timestamp: Date.now(),
+          latency: 0,
+          cached: false
+        };
+        cache.set(cacheKey, entry);
+        return { query, price: entry.price, timestamp: entry.timestamp, error: undefined };
+      } catch (error: any) {
+        return { query, price: null, timestamp: Date.now(), error: error?.message ?? String(error) };
       }
     })
   );
-  
+
   return {
     results,
-    latency: Date.now() - startTime,
-    count: results.length
+    count: results.length,
+    latency: Date.now() - start,
+    cached: false
   };
 }
 
-// Initialize MCP Server
 const server = new Server(
-  {
-    name: "polygon-blockchain",
-    version: "1.0.0"
-  },
-  {
-    capabilities: {
-      tools: {}
-    }
-  }
+  { name: "polygon-blockchain", version: "1.0.0" },
+  { capabilities: { tools: {} } }
 );
 
-// Define tools
 const TOOLS: Tool[] = [
   {
     name: "get_dex_prices",
@@ -307,7 +317,7 @@ const TOOLS: Tool[] = [
       properties: {
         tokenA: { type: "string", description: "Token A address" },
         tokenB: { type: "string", description: "Token B address" },
-        dexes: { 
+        dexes: {
           type: "array",
           items: { type: "string" },
           description: "DEX router addresses"
@@ -341,10 +351,7 @@ const TOOLS: Tool[] = [
     inputSchema: {
       type: "object",
       properties: {
-        blockNumber: { 
-          type: ["number", "string"],
-          description: "Block number or 'latest'"
-        }
+        blockNumber: { type: ["number", "string"], description: "Block number or 'latest'" }
       },
       required: ["blockNumber"]
     }
@@ -363,7 +370,8 @@ const TOOLS: Tool[] = [
               tokenA: { type: "string" },
               tokenB: { type: "string" },
               dex: { type: "string" }
-            }
+            },
+            required: ["tokenA", "tokenB", "dex"]
           }
         }
       },
@@ -372,18 +380,13 @@ const TOOLS: Tool[] = [
   }
 ];
 
-// List tools handler
-server.setRequestHandler(ListToolsRequestSchema, async () => ({
-  tools: TOOLS
-}));
+server.setRequestHandler(ListToolsRequestSchema, async () => ({ tools: TOOLS }));
 
-// Call tool handler
 server.setRequestHandler(CallToolRequestSchema, async (request) => {
   const { name, arguments: args } = request.params;
-  
+
   try {
     let result;
-    
     switch (name) {
       case "get_dex_prices":
         result = await getDEXPrices(args as any);
@@ -392,40 +395,32 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         result = await getGasPrice();
         break;
       case "get_pending_tx":
-        result = await getPendingTransaction(args.txHash as string);
+        result = await getPendingTransaction((args as any).txHash);
         break;
       case "get_block":
-        result = await getBlockData(args.blockNumber as any);
+        result = await getBlockData((args as any).blockNumber);
         break;
       case "batch_get_prices":
-        result = await batchGetPrices(args.queries as any);
+        result = await batchGetPrices((args as any).queries);
         break;
       default:
         throw new Error(`Unknown tool: ${name}`);
     }
-    
+
     return {
-      content: [{
-        type: "text",
-        text: JSON.stringify(result, null, 2)
-      }]
+      content: [{ type: "text", text: JSON.stringify(result, null, 2) }]
     };
-  } catch (error) {
+  } catch (error: any) {
     return {
-      content: [{
-        type: "text",
-        text: JSON.stringify({ error: error.message })
-      }],
+      content: [{ type: "text", text: JSON.stringify({ error: error?.message ?? String(error) }) }],
       isError: true
     };
   }
 });
 
-// Start server
 async function main() {
   const transport = new StdioServerTransport();
   await server.connect(transport);
-  
   console.error("✅ Polygon MCP Server running (stdio)");
   console.error("📊 Cache size: 1000 entries, TTL: 5s");
   console.error("⚡ Target latency: <50ms (cached), <200ms (uncached)");

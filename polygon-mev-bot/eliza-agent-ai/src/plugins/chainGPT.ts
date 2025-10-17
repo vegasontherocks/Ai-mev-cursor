@@ -168,19 +168,9 @@ export class ChainGPTProvider {
 export const chainGPTPlugin: Plugin = {
   name: "chaingpt-solidity",
   description: "Solidity-specialized LLM for contract analysis",
-  
   actions: [],
   evaluators: [],
-  
-  providers: [
-    {
-      name: "CHAINGPT_PROVIDER",
-      get: async (runtime: IAgentRuntime) => {
-        const apiKey = runtime.getSetting("CHAINGPT_API_KEY") || "";
-        return new ChainGPTProvider(apiKey);
-      }
-    }
-  ]
+  providers: []
 };
 
 export default chainGPTPlugin;

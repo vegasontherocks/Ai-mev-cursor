@@ -1,108 +1,57 @@
-╔════════════════════════════════════════════════════════════════════╗
-║                                                                    ║
-║                    🔮 WHAT TO RUN NOW 🔮                          ║
-║                                                                    ║
-╚════════════════════════════════════════════════════════════════════╝
+================================================================
+WHAT TO RUN (ACCURATE as of October 2025)
+================================================================
 
-SINGLE COMMAND TO GENERATE EVERYTHING:
+1. **Verify environment setup**
+   ```bash
+   cd /workspaces/Ai-mev-cursor/polygon-mev-bot
+   cp .env.example .env        # replace every placeholder
+   ```
+   Required keys: `THIRDWEB_SECRET_KEY`, `THIRDWEB_CLIENT_ID`, `PRIVATE_KEY`, `POLYGON_RPC_URL`, `POLYGON_WSS_URL`, `POLYGONSCAN_API_KEY`.
 
-    cd /workspace/polygon-mev-bot && ./GENERATE_NOW.sh
+2. **Install toolchains**
+   ```bash
+   foundryup
+   cd scripts && npm install && cd ..
+   cd eliza-agent-ai && npm install && cd ..
+   cd eliza-agent && npm install && cd ..
+   ```
 
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+3. **Attempt contract generation**
+   ```bash
+   ./GENERATE_NOW.sh
+   ls contracts/src/generated
+   ```
+   Success criteria: the directory contains **six** files (`MEVExecutor.sol`, `DEXAdapter.sol`, `AaveAdapter.sol`, `JITAdapter.sol`, `OracleLib.sol`, `Interfaces.sol`). If any are missing, inspect the generator output and implement the adapters manually.
 
-WHAT NEBULA WILL GENERATE:
+4. **Compile and test**
+   ```bash
+   cd contracts
+   forge build
+   forge test -vv
+   ```
+   Expand tests to cover the adapters before continuing. Do not deploy while tests fail or adapters are absent.
 
-✅ MEVExecutor.sol (600+ lines)
-   - COMPLETE Balancer V2 flash loan callback logic
-   - COMPLETE multi-DEX arbitrage implementation  
-   - COMPLETE JIT liquidity provision logic
-   - COMPLETE Aave V3 liquidation execution
-   - Circuit breakers, Kelly Criterion, everything!
+5. **Patch the agent**
+   - Implement the real Thirdweb API calls in `eliza-agent-ai/src/services/thirdweb-nebula-integration.ts`.
+   - Ensure `mcp-config.json` points to a reachable MCP server.
+   - Provide `models/ppo_agent.onnx` or add download logic.
 
-✅ DEXAdapter.sol (400+ lines)
-   - COMPLETE Uniswap V2 swap implementation
-   - COMPLETE Uniswap V3 exactInput/exactOutput
-   - COMPLETE price comparison across DEXs
-   - Optimal routing algorithms
+6. **Dry-run the pipeline**
+   - Keep `DRY_RUN=true` and `ALLOW_EXECUTION=false` in all `.env` files.
+   - Start the agent only after the API client and RL model are wired up.
 
-✅ AaveAdapter.sol (300+ lines)
-   - COMPLETE health factor calculations
-   - COMPLETE liquidation profitability checks
-   - COMPLETE liquidationCall implementation
-   - Collateral swap and profit extraction
+7. **(Later) Deployment**
+   ```bash
+   cd contracts
+   forge script script/DeployGenerated.s.sol \
+     --rpc-url $POLYGON_RPC_URL \
+     --broadcast \
+     --verify \
+     --etherscan-api-key $POLYGONSCAN_API_KEY
+   ```
+   Set `MEV_EXECUTOR_ADDRESS` everywhere and rerun tests against the live contract before unlocking execution.
 
-✅ JITAdapter.sol (350+ lines)
-   - COMPLETE tick range calculations
-   - COMPLETE Uniswap V3 position management
-   - COMPLETE fee collection logic
-   - Atomic frontrun+backrun execution
-
-✅ OracleLib.sol (200+ lines)
-   - COMPLETE Chainlink integration
-   - COMPLETE TWAP validation
-   - Price manipulation detection
-   - Staleness checks
-
-✅ Interfaces.sol (500+ lines)
-   - ALL protocol interfaces
-   - Balancer, Uniswap V2/V3, Aave V3, Chainlink
-   - Exact function signatures
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-WHY NEBULA WRITES BETTER CODE:
-
-Trained on 1B+ blockchain transactions, Nebula knows:
-✅ Exact Balancer V2 flash loan callback pattern
-✅ Gas-optimized Uniswap swap implementations  
-✅ Aave V3 liquidation best practices
-✅ Security patterns (reentrancy, overflow, etc.)
-✅ DeFi protocol nuances (fees, slippage, etc.)
-
-RESULT: Production-grade code in 10 minutes vs 10 days manual!
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-AFTER GENERATION:
-
-1. Review: contracts/src/generated/
-   All 6 contracts should be complete and ready!
-
-2. Compile: cd contracts && forge build
-   Should compile without errors!
-
-3. Test: forge test -vv
-   All tests should pass!
-
-4. Deploy: forge script script/Deploy.s.sol --broadcast
-   Deploy to Polygon mainnet!
-
-5. Run Agent: cd ../eliza-agent-ai && npm start
-   Start MEV extraction!
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-TIME ESTIMATE:
-
-Generation:    5-10 minutes
-Review:        10-20 minutes
-Deploy:        2-5 minutes
-────────────────────────────
-Total:         20-35 minutes
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-RUN THIS NOW:
-
-    cd /workspace/polygon-mev-bot
-    ./GENERATE_NOW.sh
-
-Then watch Nebula generate production-grade MEV contracts! 🔮
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-Your credentials are already configured! ✅
-Thirdweb Nebula is ready to generate! ✅
-All you need to do is run the command! ✅
-
-GO! ⚡🚀
+================================================================
+SHORT VERSION: nothing is turnkey. Validate each step, keep notes, and do not run live funds until every checkbox in `.github/copilot-instructions.md` is green.
+================================================================

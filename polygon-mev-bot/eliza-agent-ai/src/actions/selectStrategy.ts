@@ -2,6 +2,7 @@ import { Action, IAgentRuntime, Memory, State, HandlerCallback } from "@ai16z/el
 import { elizaLogger } from "@ai16z/eliza";
 import { composeContext, generateText } from "@ai16z/eliza";
 import * as ort from 'onnxruntime-node';
+import { recordStrategyDecision } from "../metrics/agentMetrics.js";
 
 const strategyTemplate = `
 # MEV Strategy Selection
@@ -67,12 +68,12 @@ export const selectStrategyAction: Action = {
   name: "SELECT_STRATEGY",
   similes: ["CHOOSE_STRATEGY", "OPTIMIZE_STRATEGY", "STRATEGY_SELECTION"],
   description: "Uses RL model + LLM validation to select optimal MEV strategy",
-  
+
   validate: async (runtime: IAgentRuntime, message: Memory): Promise<boolean> => {
     const content = message.content as any;
     return content.type === "STRATEGY_SELECTION_REQUEST" && content.data !== undefined;
   },
-  
+
   handler: async (
     runtime: IAgentRuntime,
     message: Memory,
@@ -81,18 +82,18 @@ export const selectStrategyAction: Action = {
     callback?: HandlerCallback
   ): Promise<boolean> => {
     elizaLogger.info("🎯 AI selecting strategy using RL + LLM reasoning...");
-    
+
     try {
       const { opportunity, analysis } = (message.content as any).data;
-      
+
       // Step 1: Get RL model recommendation
       elizaLogger.info("🤖 Querying RL model...");
       const rlRecommendation = await getRLRecommendation(opportunity);
-      
+
       // Step 2: Gather additional context
       const strategyPerformance = await getStrategyPerformance(runtime);
       const marketConditions = await getMarketConditions(runtime);
-      
+
       // Step 3: LLM validates and optimizes
       const context = {
         opportunityDetails: JSON.stringify(opportunity, null, 2),
@@ -109,26 +110,32 @@ export const selectStrategyAction: Action = {
         gasMultiplier: calculateGasMultiplier(opportunity, marketConditions),
         expectedGas: estimateGasCost(opportunity, marketConditions)
       };
-      
+
       const strategyPrompt = composeContext({
-        state: state || {},
+        state: (state as State) || ({} as unknown as State),
         template: strategyTemplate,
         ...context
       });
-      
+
       elizaLogger.debug("Sending to LLM for strategy validation...");
-      
+
       const strategyAnalysis = await generateText({
         runtime,
         context: strategyPrompt,
         modelClass: "large"
       });
-      
+
       elizaLogger.info("📊 Strategy Analysis:", strategyAnalysis);
-      
+
       // Parse final strategy
       const finalStrategy = parseStrategyDecision(strategyAnalysis, rlRecommendation);
-      
+
+      recordStrategyDecision({
+        type: finalStrategy.type,
+        shouldExecute: finalStrategy.shouldExecute,
+        confidence: finalStrategy.confidence
+      });
+
       // Store decision in memory
       await runtime.messageManager.createMemory({
         userId: runtime.agentId,
@@ -141,12 +148,11 @@ export const selectStrategyAction: Action = {
           rlRecommendation,
           finalStrategy,
           timestamp: Date.now()
-        },
-        embedding: await runtime.embed(JSON.stringify(finalStrategy))
+        }
       });
-      
+
       elizaLogger.success(`✅ Final Strategy: ${finalStrategy.type} (confidence: ${finalStrategy.confidence}%)`);
-      
+
       // If confident, execute
       if (finalStrategy.shouldExecute && finalStrategy.confidence >= 75) {
         await runtime.processActions(
@@ -169,21 +175,21 @@ export const selectStrategyAction: Action = {
       } else {
         elizaLogger.info(`⏭️  Not executing: confidence too low (${finalStrategy.confidence}%)`);
       }
-      
+
       if (callback) {
         callback({
           text: formatStrategyResponse(finalStrategy),
           action: finalStrategy.shouldExecute ? "EXECUTE" : "SKIP"
         });
       }
-      
+
       return true;
     } catch (error) {
       elizaLogger.error("Error in SELECT_STRATEGY:", error);
       return false;
     }
   },
-  
+
   examples: [
     [
       {
@@ -214,19 +220,19 @@ async function getRLRecommendation(opportunity: any): Promise<any> {
       rlSession = await ort.InferenceSession.create(modelPath);
       elizaLogger.info("✅ RL model loaded");
     }
-    
+
     // Extract features from opportunity
     const features = extractRLFeatures(opportunity);
     const inputTensor = new ort.Tensor('float32', features, [1, features.length]);
-    
+
     // Run inference
     const results = await rlSession.run({ input: inputTensor });
     const actionProbs = Array.from(results.output.data as Float32Array);
-    
+
     // Map to strategies
     const strategies = ['ARBITRAGE', 'JIT', 'LIQUIDATION', 'BACKRUN'];
     const bestIdx = actionProbs.indexOf(Math.max(...actionProbs));
-    
+
     return {
       strategy: strategies[bestIdx],
       confidence: actionProbs[bestIdx] * 100,
@@ -235,7 +241,7 @@ async function getRLRecommendation(opportunity: any): Promise<any> {
     };
   } catch (error) {
     elizaLogger.warn("RL model not available, using heuristic:", error);
-    
+
     // Fallback to simple heuristic
     if (opportunity.type === 'ARBITRAGE') {
       return { strategy: 'ARBITRAGE', confidence: 70, experienceCount: 0 };
@@ -282,7 +288,7 @@ function calculateGasMultiplier(opportunity: any, market: any): number {
   const baseMultiplier = 1.1;
   const competitionBonus = market.competition === "HIGH" ? 0.3 : 0.1;
   const valueBonus = (opportunity.expectedProfit || 0.02) > 0.1 ? 0.2 : 0;
-  
+
   return baseMultiplier + competitionBonus + valueBonus;
 }
 
@@ -291,36 +297,36 @@ function estimateGasCost(opportunity: any, market: any): string {
   const gasPrice = market.gasPrice || 150;
   const gasCostGwei = gasLimit * gasPrice;
   const gasCostMatic = gasCostGwei / 1e9;
-  
+
   return gasCostMatic.toFixed(4);
 }
 
 function parseStrategyDecision(analysis: string, rlRec: any): any {
   const lines = analysis.toLowerCase();
-  
+
   // Parse strategy
   let strategy = rlRec.strategy;
   if (lines.includes('arbitrage')) strategy = 'ARBITRAGE';
   else if (lines.includes('jit')) strategy = 'JIT';
   else if (lines.includes('liquidation')) strategy = 'LIQUIDATION';
   else if (lines.includes('backrun')) strategy = 'BACKRUN';
-  
+
   // Parse execute decision
-  const shouldExecute = lines.includes('execute: yes') || 
-                       (lines.includes('yes') && !lines.includes('no'));
-  
+  const shouldExecute = lines.includes('execute: yes') ||
+    (lines.includes('yes') && !lines.includes('no'));
+
   // Parse confidence
   const confidenceMatch = analysis.match(/confidence:?\s*(\d{1,3})%/i);
   const confidence = confidenceMatch ? parseInt(confidenceMatch[1]) : rlRec.confidence;
-  
+
   // Parse position size
   const positionMatch = analysis.match(/position size:?\s*(\d+\.?\d*)\s*matic/i);
   const positionSize = positionMatch ? parseFloat(positionMatch[1]) : 0.1;
-  
+
   // Parse gas multiplier
   const gasMatch = analysis.match(/gas multiplier:?\s*(\d+\.?\d*)x/i);
   const gasMultiplier = gasMatch ? parseFloat(gasMatch[1]) : 1.1;
-  
+
   return {
     type: strategy,
     shouldExecute,
@@ -334,12 +340,12 @@ function parseStrategyDecision(analysis: string, rlRec: any): any {
 function formatStrategyResponse(strategy: any): string {
   if (strategy.shouldExecute) {
     return `✅ EXECUTING ${strategy.type}\n` +
-           `Confidence: ${strategy.confidence}%\n` +
-           `Position: ${strategy.positionSize} MATIC\n` +
-           `Gas: ${strategy.gasMultiplier}x multiplier`;
+      `Confidence: ${strategy.confidence}%\n` +
+      `Position: ${strategy.positionSize} MATIC\n` +
+      `Gas: ${strategy.gasMultiplier}x multiplier`;
   } else {
     return `⏭️  STRATEGY SELECTED BUT NOT EXECUTING\n` +
-           `Reason: Confidence below threshold`;
+      `Reason: Confidence below threshold`;
   }
 }
 

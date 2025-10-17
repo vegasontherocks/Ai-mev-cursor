@@ -1,400 +1,110 @@
-# Troubleshooting Guide
+# Troubleshooting Guide (Reality-Based)
 
-Common issues and solutions for Polygon MEV Bot.
+Use this guide to diagnose the most common failures when working toward a verifiable Polygon MEV bot. Each section lists the symptoms you are likely to see today and the mitigation steps to unblock progress.
 
-## Smart Contract Issues
+## 1. Before You Troubleshoot
 
-### Issue: "Insufficient funds for transaction"
+- Confirm environment variables:
+  ```bash
+  grep -E "THIRDWEB|PRIVATE_KEY|POLYGON" .env
+  ```
+- Inspect the generated contracts directory:
+  ```bash
+  ls -1 contracts/src/generated
+  ```
+  You should see **six** files. If not, start with [Issue 2](#issue-missing-generated-adapters).
 
-**Cause**: Not enough MATIC for gas
+## 2. Contract Generation & Compilation
 
-**Solution**:
-```bash
-# Check balance
-cast balance $WALLET_ADDRESS --rpc-url $POLYGON_RPC_URL
+### Issue: Missing Generated Adapters
+- **Symptoms**: `ls contracts/src/generated` only shows `MEVExecutor.sol` and `Interfaces.sol`; `forge build` fails with `File not found: ... DEXAdapter.sol`.
+- **Fix**:
+  1. Re-run `./GENERATE_NOW.sh` and watch the console for Nebula errors.
+  2. If Nebula omits files, inspect any output saved under `scripts/.nebula-cache` (if enabled) or the terminal log.
+  3. Manually implement the missing adapters (`DEXAdapter.sol`, `AaveAdapter.sol`, `JITAdapter.sol`, `OracleLib.sol`) when Nebula cannot deliver them. Document deviations so the prompts can be updated later.
 
-# Fund wallet (need at least 1 MATIC for deployment)
-```
+### Issue: Thirdweb SDK / Nebula Errors (`Missing required environment variable` or `Thirdweb SDK wallet call() method unavailable`)
+- **Symptoms**: The generator exits immediately with configuration errors.
+- **Fix**:
+  - Ensure `.env` contains `PRIVATE_KEY`, `THIRDWEB_SECRET_KEY`, and `THIRDWEB_CLIENT_ID`.
+  - Verify the SDK version in `scripts/package.json`; update via `npm install @thirdweb-dev/sdk@latest` if the wallet `call` helper is missing.
 
-### Issue: "Contract deployment fails with 'out of gas'"
+### Issue: Generation Succeeds but Files Contain Empty Bodies
+- **Symptoms**: Generated file exists but lacks `pragma` or contract code; downstream compilation fails with parser errors.
+- **Fix**: Delete the empty file, re-run the generator, and confirm the file includes `pragma solidity` plus the expected contract/library body. The generator now fails automatically when any output is empty thanks to `scripts/validate-generated-contracts.mjs`, which exits with errors like `AaveAdapter.sol appears to be empty or truncated`.
 
-**Cause**: Gas limit too low
+## 3. Foundry Builds & Tests
 
-**Solution**:
-```bash
-# Deploy with higher gas limit
-forge script script/Deploy.s.sol \
-  --rpc-url $POLYGON_RPC_URL \
-  --broadcast \
-  --gas-limit 3000000
-```
+### Issue: `forge build` Fails Because Imports Cannot Be Resolved
+- **Symptoms**: Errors such as `CompilerError: Source "../src/generated/DEXAdapter.sol" not found`.
+- **Fix**: Regenerate or create the missing generated adapters. The new `GeneratedContractsPresenceTest` intentionally imports every generated file so compilation fails until all six are present.
 
-### Issue: "Circuit breaker triggered immediately"
+### Issue: Adapter Interfaces Change Between Runs
+- **Symptoms**: Tests that reference functions in the adapters fail to compile after regeneration.
+- **Fix**: Stabilise the prompts or manually maintain the adapter interfaces. Consider pinning adapter ABI surface area in mocks/tests so you notice contract drift early.
 
-**Cause**: Parameters too strict or contract misconfigured
+### Issue: `forge test` Hangs or Reverts Inside `MEVExecutor.t.sol`
+- **Symptoms**: Tests never finish because mocks expect functionality that the real contract does not implement.
+- **Fix**: Update the mocks/test expectations to match the actual executor implementation. Focus on ensuring circuit breaker defaults, ownership flows, and basic flash-loan repayment logic behave as expected until adapters exist.
 
-**Solution**:
-```bash
-# Check current parameters
-cast call $MEV_EXECUTOR_ADDRESS "circuitBreaker()"
+## 4. Agent & MCP Pipeline
 
-# Adjust if needed
-cast send $MEV_EXECUTOR_ADDRESS \
-  "setCircuitBreaker(uint256,uint256,uint256,uint256)" \
-  0.005ether 0.2ether 10ether 500 \
-  --private-key $PRIVATE_KEY
-```
+### Issue: `TypeError: callTool is not a function` or Stubbed Responses
+- **Symptoms**: `npm start` prints that the agent fell back to heuristics or cannot contact Nebula.
+- **Fix**: Implement the real HTTP client in `eliza-agent-ai/src/services/thirdweb-nebula-integration.ts`, calling `POST https://api.thirdweb.com/ai/chat` with the documented headers. Add error logging that surfaces HTTP status codes.
 
-### Issue: "Flash loan fails with 'INSUFFICIENT_LIQUIDITY'"
+### Issue: RL Model Missing (`ENOENT: no such file or directory, open 'models/ppo_agent.onnx'`)
+- **Symptoms**: Agent falls back to placeholder strategies.
+- **Fix**: Supply the ONNX model locally, adjust configuration to point to the downloaded path, or modify the agent to download and cache the model during startup. Do not enable live execution until the model load succeeds.
 
-**Cause**: Balancer pool doesn't have enough tokens
+### Issue: MCP Client Fails to Connect (`ECONNREFUSED 127.0.0.1:7001`)
+- **Symptoms**: Agent startup stops at “Connecting to MCP server…”.
+- **Fix**: Start the MCP server (`npm run start` inside `mcp-servers/polygon-blockchain`) or update `mcp-config.json` to use the official `@thirdweb-dev/mcp-server` endpoint with valid credentials.
 
-**Solution**:
-- Reduce loan amount
-- Try different token pairs
-- Check Balancer pool liquidity: https://app.balancer.fi
+## 5. Deployment & Runtime Checks
 
-### Issue: "Transaction reverts with 'InsufficientProfit'"
+### Issue: `forge script` Deployment Fails Because Constructor Arguments Differ
+- **Symptoms**: `TypeError: wrong number of arguments to constructor`.
+- **Fix**: Keep `DeployGenerated.s.sol` synchronized with the regenerated `MEVExecutor` constructor signature. If you customize the executor, update both the deployment script and the tests that assert constructor behaviour.
 
-**Cause**: Opportunity no longer profitable (frontrun or stale)
+### Issue: Dry-Run Transactions Attempt On-Chain Sends
+- **Symptoms**: Agent tries to broadcast despite `DRY_RUN=true`.
+- **Fix**: Double-check `.env` across the project (`root`, `eliza-agent`, `eliza-agent-ai`) for mismatched values. Guard every execution path with `ALLOW_EXECUTION` / `ALLOW_NEBULA_EXECUTION` booleans when wiring the agent pipeline.
 
-**Solution**: This is normal MEV competition. The bot will:
-- Only lose gas costs (no capital loss)
-- Circuit breakers prevent excessive losses
-- Adjust `minProfitThreshold` if too aggressive
+## 6. Diagnostics Commands
 
-## Agent Issues
-
-### Issue: "WebSocket connection failed"
-
-**Cause**: Invalid WebSocket URL or API limit reached
-
-**Solution**:
-```bash
-# Test WebSocket connection
-wscat -c $POLYGON_WSS_URL
-
-# Use backup RPC if primary fails
-export POLYGON_WSS_URL="wss://polygon-rpc.com"
-```
-
-### Issue: "Agent starts but no opportunities detected"
-
-**Cause**: This is normal - MEV opportunities are rare
-
-**Expected behavior**:
-- May take hours between opportunities
-- Polygon has less MEV than Ethereum
-- Most opportunities are small (<0.1 MATIC)
-
-**Verify monitoring is working**:
-```bash
-# Check agent logs
-tail -f eliza-agent/logs/*.log
-
-# Should see periodic mempool scans
-# "Scanning arbitrage opportunities..."
-```
-
-### Issue: "TypeError: Cannot read property 'address'"
-
-**Cause**: MEV_EXECUTOR_ADDRESS not set
-
-**Solution**:
-```bash
-# Set in .env
-echo "MEV_EXECUTOR_ADDRESS=0x..." >> .env
-
-# Restart agent
-npm start
-```
-
-### Issue: "Gas price exceeds MAX_GAS_PRICE"
-
-**Cause**: Network congestion
-
-**Solution**:
-```bash
-# Increase max gas price in .env
-echo "MAX_GAS_PRICE=1000" >> .env
-
-# Or wait for lower gas prices
-```
-
-## Performance Issues
-
-### Issue: "Win rate below 50%"
-
-**Cause**: High competition or suboptimal parameters
-
-**Solutions**:
-1. **Reduce min profit threshold** (less selective, more attempts)
-   ```bash
-   # .env
-   MIN_PROFIT_THRESHOLD=0.005
-   ```
-
-2. **Increase gas multiplier** (faster execution)
-   ```bash
-   # In character config
-   "gasMultiplier": 1.2  # from 1.1
-   ```
-
-3. **Use FastLane** (priority execution)
-   ```bash
-   FASTLANE_ENABLED=true
-   ```
-
-### Issue: "High gas costs eating profits"
-
-**Cause**: Gas optimization needed or wrong strategy
-
-**Solutions**:
-1. **Increase min profit threshold**
-   ```bash
-   MIN_PROFIT_THRESHOLD=0.02  # from 0.01
-   ```
-
-2. **Profile gas usage**
-   ```bash
-   cd contracts
-   forge test --gas-report
-   ```
-
-3. **Focus on larger opportunities**
-   - Adjust DEX monitoring filters
-   - Increase minimum swap size detection
-
-### Issue: "Sharpe ratio < 1.0"
-
-**Cause**: Too much volatility or losing trades
-
-**Solutions**:
-1. **Tighten circuit breakers**
-   ```solidity
-   setCircuitBreaker(
-     0.02 ether,  // Higher min profit
-     0.05 ether,  // Lower max loss
-     2 ether,     // Lower daily limit
-     200          // Lower drawdown (2%)
-   )
-   ```
-
-2. **Use fractional Kelly sizing**
-   ```solidity
-   setKellyParameters(
-     7500,        // Win rate
-     0.05 ether,  // Avg win
-     0.02 ether,  // Avg loss
-     2500         // 25% Kelly (more conservative)
-   )
-   ```
-
-## Security Issues
-
-### Issue: "Suspicious transaction from contract"
-
-**Cause**: Possible exploit attempt
-
-**IMMEDIATE ACTION**:
-```bash
-# 1. Pause contract
-cast send $MEV_EXECUTOR_ADDRESS "emergencyPause()" \
-  --private-key $PRIVATE_KEY
-
-# 2. Initiate emergency withdrawal
-cast send $MEV_EXECUTOR_ADDRESS "initiateEmergencyWithdrawal()" \
-  --private-key $PRIVATE_KEY
-
-# 3. Wait 24 hours, then withdraw
-cast send $MEV_EXECUTOR_ADDRESS \
-  "executeEmergencyWithdrawal(address)" \
-  $TOKEN_ADDRESS \
-  --private-key $PRIVATE_KEY
-```
-
-### Issue: "Unknown function called on contract"
-
-**Cause**: Only owner should call functions
-
-**Verify**:
-```bash
-# Check if you're owner
-cast call $MEV_EXECUTOR_ADDRESS "owner()(address)"
-
-# Should match your wallet address
-echo $WALLET_ADDRESS
-```
-
-## Testing Issues
-
-### Issue: "Foundry tests fail on fork"
-
-**Cause**: RPC rate limiting or network issues
-
-**Solution**:
-```bash
-# Use local Anvil instance
-anvil --fork-url $POLYGON_RPC_URL
-
-# In another terminal
-forge test --fork-url http://localhost:8545
-```
-
-### Issue: "Test fails: 'VM Exception: revert'"
-
-**Cause**: Contract requires specific setup
-
-**Solution**:
-```bash
-# Run tests with verbosity
-forge test -vvvv
-
-# Check specific test
-forge test --match-test testFlashArbitrage -vvvv
-```
-
-## Network Issues
-
-### Issue: "RPC request timeout"
-
-**Cause**: Slow/overloaded RPC endpoint
-
-**Solution**:
-```bash
-# Use backup RPC
-export POLYGON_RPC_URL="https://polygon-rpc.com"
-
-# Or Alchemy/Infura alternative URL
-```
-
-### Issue: "Nonce too low"
-
-**Cause**: Transaction already mined or cancelled
-
-**Solution**:
-```bash
-# Get current nonce
-cast nonce $WALLET_ADDRESS --rpc-url $POLYGON_RPC_URL
-
-# Wait a few blocks and retry
-```
-
-## Data Issues
-
-### Issue: "Oracle price stale"
-
-**Cause**: Chainlink oracle not updated recently
-
-**Check**:
-```bash
-# Query oracle last update
-cast call $CHAINLINK_ORACLE \
-  "latestRoundData()(uint80,int256,uint256,uint256,uint80)"
-
-# Timestamp should be within 1 hour
-```
-
-### Issue: "TWAP deviation too high"
-
-**Cause**: Price manipulation or volatile market
-
-**This is intentional protection!**
-- Circuit breaker preventing manipulation
-- Wait for prices to stabilize
-- Consider increasing MAX_TWAP_DEVIATION (carefully!)
-
-## Debugging Commands
-
-### Check Contract State
+Use these when filing issues or updating the verification matrix:
 
 ```bash
-# Circuit breaker status
-cast call $MEV_EXECUTOR_ADDRESS "circuitBreaker()"
+# List required generated artifacts
+ls -1 contracts/src/generated
 
-# Kelly parameters
-cast call $MEV_EXECUTOR_ADDRESS "kellyParams()"
+# Run the post-generation validator
+node scripts/validate-generated-contracts.mjs
 
-# Stats
-cast call $MEV_EXECUTOR_ADDRESS "getStats()"
+# Run the generator with verbose logging
+DEBUG=nebula ./GENERATE_NOW.sh
 
-# Sharpe ratio
-cast call $MEV_EXECUTOR_ADDRESS "getSharpeRatio()"
+# Build and run tests
+cd contracts
+forge clean && forge build
+forge test -vv
+
+# Check agent dependencies
+cd ../eliza-agent-ai
+npm ls @thirdweb-dev/sdk
+node -e "console.log(require('path').resolve('models/ppo_agent.onnx'))"
+
+# Validate MCP connectivity
+curl -i http://localhost:7001/health || echo "MCP offline"
 ```
 
-### Check Recent Transactions
+## 7. When to Stop and Reassess
 
-```bash
-# Get latest transactions
-cast logs $MEV_EXECUTOR_ADDRESS \
-  --rpc-url $POLYGON_RPC_URL
+Pause active development and capture findings in the verification matrix when:
 
-# Filter for profits
-cast logs $MEV_EXECUTOR_ADDRESS \
-  --rpc-url $POLYGON_RPC_URL \
-  --event "StrategyExecuted(uint8,address,uint256,uint256,uint256)"
-```
+- Contract generation fails repeatedly or produces code that will not compile even after pruning markdown artefacts.
+- Foundry tests reveal logic gaps (e.g., no repayment inside `receiveFlashLoan`) that require architectural changes.
+- The agent runs without the RL model or Nebula connectivity—continuing without these makes subsequent logs misleading.
 
-### Test Connectivity
-
-```bash
-# Test RPC
-curl -X POST $POLYGON_RPC_URL \
-  -H "Content-Type: application/json" \
-  -d '{"jsonrpc":"2.0","method":"eth_blockNumber","params":[],"id":1}'
-
-# Test WebSocket
-wscat -c $POLYGON_WSS_URL
-```
-
-## Getting More Help
-
-### Enable Debug Logging
-
-```bash
-# In .env
-DEBUG=true
-
-# Restart agent
-npm start
-```
-
-### Collect Diagnostic Info
-
-```bash
-# System info
-node -v
-forge --version
-cast --version
-
-# Network info
-cast chain-id --rpc-url $POLYGON_RPC_URL
-cast block-number --rpc-url $POLYGON_RPC_URL
-
-# Contract info
-cast code $MEV_EXECUTOR_ADDRESS --rpc-url $POLYGON_RPC_URL | head -c 100
-```
-
-### Review Logs
-
-```bash
-# Agent logs
-tail -100 eliza-agent/logs/*.log
-
-# System logs
-journalctl -u mev-bot -n 100
-```
-
-## Still Having Issues?
-
-1. Check contract on PolygonScan: `https://polygonscan.com/address/$MEV_EXECUTOR_ADDRESS`
-2. Review recent transactions for errors
-3. Test with minimal capital first (0.01 MATIC)
-4. Consider consulting a Solidity security expert for contract review
-
----
-
-**Remember**: Some "failures" are expected in MEV! The bot is designed to:
-- Fail safely (circuit breakers)
-- Minimize gas costs on failures
-- Protect capital above all else
+Document the exact error output, commands executed, and any manual edits made. This context is critical for updating prompts, adjusting the roadmap, and avoiding regressions once CI enforces generation completeness.

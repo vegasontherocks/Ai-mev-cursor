@@ -95,8 +95,9 @@ export const learnFromResultAction: Action = {
       };
       
       // Step 3: AI analyzes outcome
+      const contextState = (state ?? ({} as State)) as State;
       const learningPrompt = composeContext({
-        state: state || {},
+        state: contextState,
         template: learningTemplate,
         ...context
       });
@@ -125,7 +126,8 @@ Profit: ${actualProfit} MATIC
 Insight: ${updates.mainInsight}
 `;
       
-      await runtime.messageManager.createMemory({
+      const runtimeAny = runtime as any;
+      const memoryPayload: any = {
         userId: runtime.agentId,
         agentId: runtime.agentId,
         roomId: runtime.agentId,
@@ -138,9 +140,18 @@ Insight: ${updates.mainInsight}
           insights,
           updates,
           timestamp: Date.now()
-        },
-        embedding: await runtime.embed(memoryText)
-      });
+        }
+      };
+
+      if (typeof runtimeAny.embed === "function") {
+        try {
+          memoryPayload.embedding = await runtimeAny.embed(memoryText);
+        } catch (embedError) {
+          elizaLogger.warn("Embedding generation failed", embedError);
+        }
+      }
+
+      await runtime.messageManager.createMemory(memoryPayload);
       
       // Step 7: Update performance metrics
       await updatePerformanceMetrics(runtime, execution);

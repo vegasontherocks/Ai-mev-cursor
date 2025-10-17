@@ -3,7 +3,8 @@
   "version": "1.0.0",
   "type": "module",
   "scripts": {
-    "generate-contracts": "ts-node generate-contracts-with-nebula.ts"
+    "generate-contracts": "ts-node generate-contracts-with-nebula.ts",
+    "validate-contracts": "node ./validate-generated-contracts.mjs"
   },
   "dependencies": {
     "@thirdweb-dev/sdk": "^4.0.99",

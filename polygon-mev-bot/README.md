@@ -1,193 +1,150 @@
-# ⚡ MEV Bot - Blockchain LLM Generated Contracts
+As of 2025-10-14, all contracts and tests build clean and pass; legacy docs/tests archived or restored in `docs/archive/`. E2E agent pipeline validation pending.
 
-## 🎯 The Right Way to Build MEV Bots
+## Polygon MEV Bot – Reality Guide
 
-1. ✅ **Let Thirdweb Nebula generate smart contracts** (blockchain-trained LLM)
-2. ✅ **Use Thirdweb Nebula for execution** (direct blockchain connection)
-3. ✅ **Official @thirdweb-dev/mcp-server** (optimized tools)
-4. ✅ **Minimal latency** (400ms vs 2700ms traditional)
+This repository contains a Foundry-based contract suite (`contracts/`) and an Eliza agent (`eliza-agent-ai/`) that orchestrate Polygon MEV strategies (flash loans, arbitrage, liquidations, and Uniswap v3 JIT liquidity). The project has been brought to a lint-clean state with comprehensive tests, but production readiness still requires operational validation.
 
-## 🚀 Quick Start
+### Repository Layout
 
-### Step 1: Generate Smart Contracts with Nebula
+| Path | Purpose |
+| --- | --- |
+| `contracts/` | Foundry workspace with generated executor/adapters and tests |
+| `docs/` | Authoritative setup & troubleshooting guides |
+| `eliza-agent-ai/` | Primary agent, MCP integration, and opportunity pipeline |
+| `mcp-servers/` | Local MCP server (Polygon blockchain tooling) |
+| `scripts/` | Nebula contract generation utilities |
+
+Historical marketing documents in the root folder have been removed from `main`; rely on `docs/` for verified guidance.
+
+### Current Status
+
+- ✅ `forge build` and `forge test` run silently (no warnings) when the generated contracts and adapters are present.
+- ✅ All Solidity sources import specific symbols from `Interfaces.sol` (named imports only) to keep Foundry lint quiet.
+- ✅ `eliza-agent-ai` actions emit structured success/failure events for both dry-run and live execution paths.
+- ⚠️ End-to-end (agent → simulation → live send) still needs validation on forks/live infrastructure—see **Operational Checklist** below.
+
+### Development Standards
+
+1. **Named Imports Required** – Always import only the interfaces you use:
+   ```solidity
+   import { IERC20, IVault } from "./Interfaces.sol";
+   ```
+   Wildcard imports trigger Foundry lint failures in CI.
+
+2. **Router `WETH()` Handling** – The legacy `IUniswapV2Router02.WETH()` signature has been removed because it is unused. If a future update needs it:
+   - reintroduce the method in `Interfaces.sol`,
+   - add `// forge-ignore-next-line mixed-case-function` above it,
+   - ensure every caller is covered by tests.
+
+3. **Testing Discipline** – Any contract or adapter change must keep `forge fmt`, `forge build`, and `forge test` (at least `-vv`) green. Add regression tests in `contracts/test/` for new behaviours.
+
+4. **Secrets** – `.env` stays untracked. Use `polygon-mev-bot/.env.example` (now sanitized) as the template and never commit real keys.
+
+See `docs/QUICK_START.md` for the full dev flow and troubleshooting tips.
+
+### Operational Checklist
+
+Before calling the stack production-ready, work through the validation plan (documented in `docs/QUICK_START.md` and `docs/TROUBLESHOOTING.md`):
+
+1. **Opportunity Detection** – Run the Eliza/Nebula agent on a fork or live mempool feed and confirm real opportunities are ranked with profit estimates.
+2. **Bundle Creation** – Ensure every detected opportunity yields executable calldata with correct ordering, slippage, and token accounting.
+3. **Execution Pipeline** – Exercise the full path (simulation → `executeMEV`) both in `DRY_RUN` and live modes, capture latency, and flag reverts immediately.
+4. **Flash Loan & JIT Scenarios** – Simulate profitable price windows to ensure the adapters settle net-positive and repayments return to the executor wallet.
+5. **Resilience** – Validate recovery after missed opportunities, simulation failures, and reverted live transactions.
+
+### Thirdweb MCP Integration
+
+The agent now supports both the local Polygon MCP server and Thirdweb’s hosted MCP endpoint:
+
+1. Populate `THIRDWEB_SECRET_KEY` in your `.env` (never commit real values).
+2. Update `eliza-agent-ai/mcp-config.json` (done in this branch) so the agent knows about the remote MCP.
+3. Run the new smoke script (see below) or call `ThirdwebMCPIntegration.callTool("listServerWallets", {})` to verify connectivity.
+
+Refer to `docs/QUICK_START.md` for the command sequence and troubleshooting.
+
+## Quick Setup
+
+**🚀 Fastest way to get started:**
 
 ```bash
-cd /workspace/polygon-mev-bot
-
-# Let blockchain LLM write the contracts!
-npx ts-node scripts/generate-contracts-with-nebula.ts
+# Run the automated setup script
+./quick-setup.sh
 ```
 
-**Nebula will generate 6 complete contracts in ~5-10 minutes:**
-- MEVExecutor.sol (main contract with ALL logic)
-- DEXAdapter.sol (multi-DEX swaps)
-- AaveAdapter.sol (liquidations)
-- JITAdapter.sol (JIT liquidity)
-- OracleLib.sol (TWAP validation)
-- Interfaces.sol (all protocol interfaces)
+This will:
+- Install all npm dependencies
+- Setup the RL model (placeholder for development)
+- Verify the system is ready
 
-**See**: `GENERATE_CONTRACTS_NOW.md` for details
+**For detailed setup instructions**, see [SETUP_GUIDE.md](./SETUP_GUIDE.md).
 
-### Step 2: Deploy Contracts
+**Manual setup:**
+
+1. Copy the environment template and populate your secrets (never commit real keys):
+
+   ```bash
+   cp .env.example .env
+   # edit .env then follow quick commands below
+   ```
+
+2. Install dependencies:
+
+   ```bash
+   cd eliza-agent-ai && npm install
+   cd ../scripts && npm install
+   ```
+
+3. Setup RL model:
+
+   ```bash
+   cd eliza-agent-ai
+   npm run setup:model
+   ```
+
+4. Verify setup:
+
+   ```bash
+   npm run verify:setup
+   ```
+
+
+### Structured Execution Logs
+
+`eliza-agent-ai/src/actions/executeMEV.ts` now records JSON-formatted events for:
+
+- simulations (`SIMULATION_RESULT`),
+- dry-run skips (`DRY_RUN_SKIP`),
+- live submissions (`TX_SUBMITTED`),
+- mined transactions (`TX_MINED`),
+- failures (`TX_FAILED`).
+
+Events are both logged via `elizaLogger` and persisted as memories, making them easy to scrape for dashboards/alerting.
+
+### Quick Commands
 
 ```bash
+# Contracts
 cd contracts
-
-# Compile (should work immediately!)
+forge fmt
 forge build
+forge test
 
-# Test
-forge test -vv
-
-# Deploy to Polygon
-forge script script/Deploy.s.sol --rpc-url $POLYGON_RPC_URL --broadcast
+# Agent (after `npm install` in each workspace)
+cd ../eliza-agent-ai
+npm start -- --dry-run           # honour DRY_RUN=true
+npm run smoke:mcp                # sample MCP call (see package.json)
 ```
 
-### Step 3: Run AI Agent
+### Need More Detail?
 
-```bash
-cd eliza-agent-ai
+- **[SETUP_GUIDE.md](./SETUP_GUIDE.md)** – **NEW!** Comprehensive setup guide with verification checklist
+- `docs/QUICK_START.md` – step-by-step setup, regeneration, and validation guidance
+- `docs/TROUBLESHOOTING.md` – known failure modes and investigation tips
+- `.github/copilot-instructions.md` – verification matrix for tracking project readiness
+- **[WHAT_TO_RUN.txt](./WHAT_TO_RUN.txt)** – Quick reference for accurate workflow
 
-# Install
-npm install
+**New verification scripts:**
+- `npm run setup:model` – Download or create RL model
+- `npm run verify:setup` – Check all components from verification matrix
 
-# Add deployed contract to .env
-echo "MEV_EXECUTOR_ADDRESS=0x..." >> .env
-
-# Start
-npm start
-```
-
-## 🔮 Why Use Nebula to Generate Contracts?
-
-**Thirdweb Nebula** is trained on:
-- 1B+ blockchain transactions
-- Millions of smart contracts
-- DeFi protocol patterns
-- MEV strategies
-
-It generates **better MEV contracts than any human** because it has seen:
-- Every major flash loan pattern
-- All DEX swap mechanics
-- Common security vulnerabilities
-- Gas optimization techniques
-
-**Result**: Production-ready code in minutes, not days!
-
-## ⚡ Performance
-
-```
-Traditional Approach:
-- Manual coding: 6-10 days
-- Execution: 2700ms
-- Quality: Variable
-
-Nebula Approach:
-- Contract generation: 5-10 minutes ✅
-- Execution: 400ms ✅
-- Quality: Production-grade ✅
-```
-
-**Nebula is 50-100x faster and better!**
-
-## 📖 Documentation
-
-**Read in this order:**
-
-1. **GENERATE_CONTRACTS_NOW.md** ⭐ - Generate contracts with Nebula
-2. **NEBULA_CONTRACT_GENERATION.md** - How it works
-3. **README_OPTIMIZED.md** - AI agent setup
-4. **OPTIMIZED_SETUP.md** - Complete system guide
-
-## 🎯 What You Get
-
-### Smart Contracts (Nebula-generated)
-```
-contracts/src/generated/
-├── MEVExecutor.sol       (COMPLETE flash loan + arbitrage + JIT + liquidation)
-├── DEXAdapter.sol        (Uniswap V2/V3, SushiSwap, QuickSwap)
-├── AaveAdapter.sol       (Aave V3 liquidations)
-├── JITAdapter.sol        (Uniswap V3 JIT liquidity)
-├── OracleLib.sol         (Chainlink TWAP validation)
-└── Interfaces.sol        (All protocol interfaces)
-```
-
-### AI Agent (Nebula-powered)
-```
-eliza-agent-ai/
-├── src/thirdweb-nebula-integration.ts (Direct blockchain execution)
-├── mcp-config.json                     (Official MCP server)
-└── package.json                         (Thirdweb SDK)
-```
-
-## 🔥 Key Features
-
-✅ **Blockchain LLM generates contracts** - Nebula writes all code  
-✅ **Complete implementations** - No TODOs or placeholders  
-✅ **Gas optimized** - <200k gas per arbitrage  
-✅ **Security built-in** - ReentrancyGuard, SafeERC20, etc.  
-✅ **Direct execution** - Nebula executes on blockchain  
-✅ **Ultra-low latency** - 400ms vs 2700ms traditional  
-
-## 🎓 How It Works
-
-### Contract Generation (Once)
-```
-You: "Generate MEV executor with flash loans, arbitrage, JIT, liquidations"
-  ↓
-Nebula (blockchain LLM): [generates 500+ lines of production Solidity]
-  ↓
-Save to contracts/src/generated/
-  ↓
-Compile and deploy!
-```
-
-### Execution (Continuous)
-```
-Nebula: [scans blockchain] → [finds opportunity] → [executes directly]
-  ↓
-400ms total (vs 2700ms traditional)
-```
-
-## 💰 Cost
-
-- Contract generation: ~$0.50 (one-time)
-- Execution: ~$3/month (Claude API for agent logic)
-- Gas: $50-100/month
-
-**Total**: ~$54-104/month
-
-## ✅ Your Configuration
-
-Already configured:
-```
-THIRDWEB_CLIENT_ID=1f327e8dd39e78abf7da1e6c80ced8cd
-THIRDWEB_SECRET_KEY=5PRECcNSQ9QQdndSpaRAs4zvqER6VzJP8UOTEplGj7JgIZFRIH4p4r2JKmX9uauvEDqOg-VZOUwFBLQz1OrL3Q
-PRIVATE_KEY=0x7e10bd92ecc66ca508ebe970d98282a6edfab28a738580c09e3053db7c8eb258
-WALLET_ADDRESS=0xDB3DAAd101db01957880Cf95BA28F28dbaabA995
-```
-
-Just add after deployment:
-```
-MEV_EXECUTOR_ADDRESS=0x...
-```
-
-## 🎯 Summary
-
-**This is the RIGHT way to build MEV bots:**
-
-1. Let blockchain LLM (Nebula) generate smart contracts
-2. Use blockchain LLM (Nebula) for execution
-3. Minimal latency with direct blockchain connection
-
-**Not** generic AI writing blockchain code!  
-**Blockchain AI** writing blockchain code! 🔮⛓️
-
----
-
-**Status**: ✅ Ready  
-**Stack**: Thirdweb Nebula (LLM) + MCP + Eliza  
-**Latency**: 400ms (6.75x faster)  
-**Quality**: Production-grade  
-
-**Generate contracts now!** ⚡
+Contributions should leave the repository lint-clean, keep the Foundry suite green, and document any workflow changes so the team can reproduce results.
